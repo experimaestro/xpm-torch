@@ -3,7 +3,7 @@ from typing import Optional, TypeVar, Sequence, Iterator, Iterable
 import numpy as np
 from functools import cached_property
 from experimaestro import Config, Param
-from xpm_torch.utils.logging import easylogger
+from xpm_torch.utils.logging import EasyLogger
 from xpmir.utils.iter import SerializableIterator, BatchIteratorAdapter
 
 

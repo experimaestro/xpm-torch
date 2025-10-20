@@ -1,14 +1,12 @@
 from abc import abstractmethod
+
 from typing import Dict, Iterator, List, Optional
 from experimaestro import Config, Param
 import torch.nn as nn
 import numpy as np
-from xpm_torch.utils.logging import easylogger
+from xpm_torch.utils.logging import EasyLogger
 from xpm_torch import Module
-from xpm_torch.context import (
-    TrainingHook,
-    TrainerContext,
-)
+from xpm_torch.trainers.context import TrainerContext, TrainingHook
 
 from xpmir.utils.utils import foreach
 

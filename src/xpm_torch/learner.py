@@ -15,17 +15,15 @@ from experimaestro import (
     field,
 )
 import numpy as np
-from xpm_torch.hooks import Hook, InitializationHook
-from xpm_torch.utils.logging import EasyLogger, easylogger, easylog, foreach
-from xpm_torch.configuration import (
-    DEFAULT_DEVICE,
-    Configuration,
-    Device,
-    DeviceInformation,
-)
+from xpmir.utils.utils import foreach
+from xpmir.learning.devices import DeviceInformation
+
+from xpm_torch.context import Hook, InitializationHook
+from xpm_torch.utils.logging import EasyLogger, easylog
+from xpm_torch.configuration import Configuration
 from xpm_torch import Random, ModuleInitMode
 from xpm_torch.trainers import Trainer
-from xpm_torch.context import (
+from xpm_torch.trainers.context import (
     StepTrainingHook,
     TrainState,
     TrainerContext,
