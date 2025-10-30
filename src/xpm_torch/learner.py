@@ -16,7 +16,7 @@ from experimaestro import (
 )
 import numpy as np
 from xpm_torch.hooks import Hook, InitializationHook
-from xpm_torch.utils.logging import EasyLogger, easylogger, easylog, foreach
+from xpm_torch.utils.logging import EasyLogger, easylog, foreach
 from xpm_torch.configuration import (
     DEFAULT_DEVICE,
     Configuration,
