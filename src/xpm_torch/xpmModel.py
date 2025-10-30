@@ -20,13 +20,14 @@ from experimaestro import (
 )
 from experimaestro.core.context import SerializedPath
 from pathlib import Path
+from xpm_torch.optim import Module
 from huggingface_hub import ModelHubMixin, snapshot_download, hf_hub_download
 
 
 T = TypeVar("T", bound="xpmTorchHubModule")
 
 
-class xpmTorchHubModule(nn.Module, Config, ModelHubMixin):
+class xpmTorchHubModule(Module, ModelHubMixin):
     """
     Generic PyTorch module for experimaestro, 
     compatible with Hugging Face Hub via [ModelHubMixin](https://huggingface.co/docs/huggingface_hub/en/package_reference/mixins).
@@ -230,13 +231,12 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
 
-
     # Example child module
     class MyTorchxpmTorchHubModule(
         xpmTorchHubModule,
         library_name="my-org/my-model",
         tags=["torch", "experimaestro"],
-        repo_url="https://github.com/VictorMorand/test-model",
+        repo_url="https://github.com/your/repo",
         paper_url="https://arxiv.org/abs/???",
     ):
         """Example xpmTorchHubModule implementation, now all saving and loading is taken care of under the hood"""
