@@ -26,7 +26,7 @@ from huggingface_hub import ModelHubMixin, snapshot_download, hf_hub_download
 T = TypeVar("T", bound="xpmTorchHubModule")
 
 
-class xpmTorchHubModule(nn.Module, Config, ModelHubMixin):
+class xpmTorchHubModule(Config, nn.Module, ModelHubMixin):
     """
     Generic PyTorch module for experimaestro, 
     compatible with Hugging Face Hub via [ModelHubMixin](https://huggingface.co/docs/huggingface_hub/en/package_reference/mixins).
