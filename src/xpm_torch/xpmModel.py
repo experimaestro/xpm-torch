@@ -19,8 +19,8 @@ from experimaestro import (
     deserialize,
 )
 from experimaestro.core.context import SerializedPath
+from xpmir.learning.optim import Module #from xpm_torch.optim import Module
 from pathlib import Path
-from xpm_torch.optim import Module
 from huggingface_hub import ModelHubMixin, snapshot_download, hf_hub_download
 
 
@@ -95,13 +95,31 @@ class xpmTorchHubModule(Module, ModelHubMixin):
         """Initialize the module. Child classes should override this method to initialize their layers and other stuff."""
         super().__post_init__()
         
+    def extra_repr(self):
+        res = super().extra_repr()
+        if hasattr(self, "_parameters"):
+            res += f", n_params={self.count_parameters()}"
+        return res
 
+    def __repr__(self) -> str:
+        """Force nn.Module style repr instead of Config.__repr__."""
+        if hasattr(self, "_modules"):
+            return nn.Module.__repr__(self)
+        return super().__repr__()
+
+    # this is a nice to have but causes issues with some libraries expecting Config style strings
+    # def __str__(self) -> str:
+    #     """Force nn.Module style repr instead of Config.__str__."""
+    #     return self.__repr__()
+    
     @property
     def device(self):
         return next(self.parameters()).device
 
     def count_parameters(self):
         """Count the number of parameters in the model"""
+        if not hasattr(self, "_parameters"):
+            return 0
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     # def save_pretrained(
@@ -148,7 +166,7 @@ class xpmTorchHubModule(Module, ModelHubMixin):
 
         # # finally delete temporary files
         # params_path.unlink(missing_ok=True)
-
+    
     @classmethod
     def _from_pretrained(
         cls: Type[T],
@@ -231,12 +249,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
 
+
     # Example child module
     class MyTorchxpmTorchHubModule(
         xpmTorchHubModule,
         library_name="my-org/my-model",
         tags=["torch", "experimaestro"],
-        repo_url="https://github.com/your/repo",
+        repo_url="https://github.com/VictorMorand/test-model",
         paper_url="https://arxiv.org/abs/???",
     ):
         """Example xpmTorchHubModule implementation, now all saving and loading is taken care of under the hood"""
