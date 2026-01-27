@@ -1,9 +1,9 @@
 from enum import Enum
 import logging
 import torch
-import lightning as L
+import numpy as np
 from pathlib import Path
-from typing import Dict, Iterator, List, NamedTuple, Any
+from typing import Dict, Iterator, List, NamedTuple, Any, Optional, Union
 from experimaestro import (
     Task,
     Config,
@@ -14,23 +14,13 @@ from experimaestro import (
     Meta,
     field,
 )
-import numpy as np
-from xpmir.utils.utils import foreach
-from xpmir.learning.devices import DeviceInformation
 
-from xpm_torch.context import Hook, InitializationHook
-from xpm_torch.utils.logging import EasyLogger, easylog
-from xpm_torch.configuration import Configuration
-from xpm_torch import Random, ModuleInitMode
-from xpm_torch.trainers import Trainer
-from xpm_torch.trainers.context import (
-    StepTrainingHook,
-    TrainState,
-    TrainerContext,
-)
-from xpm_torch.metrics import Metrics
+import lightning as L
 import lightning.fabric.strategies as strategies
 
+from xpm_torch import Random, ModuleInitMode
+from xpm_torch.metrics import Metrics
+from .batchers import RecoverableOOMError
 from .optim import (
     Module,
     ModuleLoader,
@@ -38,11 +28,19 @@ from .optim import (
     ScheduledOptimizer,
     OptimizationHook,
 )
+from xpm_torch.context import Hook, InitializationHook
+from xpm_torch.utils.logging import EasyLogger
+from xpm_torch.configuration import Configuration
 
-from .batchers import RecoverableOOMError
+from xpm_torch.trainers.context import (
+    StepTrainingHook,
+    TrainState,
+    TrainerContext,
+)
+from xpm_torch.batchers import RecoverableOOMError
+from xpm_torch.trainers import Trainer
 
-logger = easylog()
-
+logger = logging.getLogger(__name__)
 
 class Strategy(Config, strategies.Strategy):
     """A Lightning strategy"""
@@ -56,6 +54,12 @@ class LearnerListenerStatus(Enum):
 
     def update(self, other: "LearnerListenerStatus") -> "LearnerListenerStatus":
         return LearnerListenerStatus(max(self.value, other.value))
+
+class CheckpointModuleLoader(ModuleLoader):
+    """Useful to load a specific checkpoint"""
+
+    epoch: Param[Optional[int]] = None
+    """The epoch of the checkpoint"""
 
 
 class LearnerListener(Config):
@@ -90,11 +94,14 @@ class LearnerListener(Config):
 class LearnerOutput(NamedTuple):
     """The data structure for the output of a learner. It contains a dictionary
     where the key is the name of the listener and the value is the output of
-    that listener"""
+    that listener. It also allows to access the checkpoints saved during 
+    the training"""
 
     listeners: Dict[str, Any]
 
     learned_model: ModuleLoader
+
+    checkpoints: Dict[str, Any]
 
 
 class Learner(Task, EasyLogger):
@@ -106,20 +113,6 @@ class Learner(Task, EasyLogger):
 
     When submitted, it returns a dictionary based on the `listeners`
     """
-
-    num_nodes: Meta[int] = 1
-    """Number of nodes"""
-
-    devices: Meta[list[int] | int | str] = "auto"
-    """List of devices to use"""
-
-    strategy: Meta[str | Strategy] = "auto"
-
-    accelerator: Meta[str] = "auto"
-    """The accelerator to use"""
-
-    precision: Param[str]
-    """Precision to use"""
 
     # Training
     random: Param[Random]
@@ -133,14 +126,11 @@ class Learner(Task, EasyLogger):
     MultipleModel.
     """
 
-    max_epochs: Param[int]
+    max_epochs: Param[int] = 1000
     """Maximum number of epochs"""
 
-    steps_per_epoch: Param[int]
+    steps_per_epoch: Param[int] = 128
     """Number of steps for one epoch (after each epoch results are logged)"""
-
-    use_fp16: Param[bool] = False
-    """Use mixed precision when training"""
 
     optimizers: Param[List[ParameterOptimizer]]
     """The list of parameter optimizers"""
@@ -158,15 +148,26 @@ class Learner(Task, EasyLogger):
     checkpointspath: Annotated[Path, pathgenerator("checkpoints")]
     """The path to the checkpoints"""
 
-    configuration: Param[Configuration] = field(default_factory=Configuration)
-    """The device(s) to be used for the model"""
-
     hooks: Param[List[Hook]] = []
     """Global learning hooks
 
-    :class:`Initialization hooks <xpmir.context.InitializationHook>` are called
+    :class:`Initialization hooks <xpm_torch.context.InitializationHook>` are called
     before and after the initialization of the trainer and listeners.
     """
+    
+    # Fabric Parameters
+    accelerator: Param[str] = "auto" 
+    """e.g., 'gpu', 'cpu', 'tpu'"""
+
+    devices: Param[Union[int, str]] = "auto"
+    """Number of devices to use, see Lightning documentation"""
+
+    strategy: Param[str] = "auto" # e.g., 'ddp', 'fsdp'
+    """Strategy to use for distributed training, see Lightning documentation"""
+
+    precision: Param[str] = "32-true" 
+    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation"""
+    
 
     def __validate__(self):
         assert self.optimizers, "At least one optimizer should be defined"
@@ -183,11 +184,12 @@ class Learner(Task, EasyLogger):
                 for listener in self.listeners
             },
             learned_model=dep(
-                ModuleLoader(
+                CheckpointModuleLoader.C(
                     value=self.model,
                     path=self.last_checkpoint_path / TrainState.MODEL_PATH,
                 )
             ),
+            checkpoints={interval: dep(CheckpointModuleLoader.C(value=self.model, path=TrainerContext.get_checkpoint_path(self.checkpointspath, interval) / TrainState.MODEL_PATH, epoch=interval)) for interval in range(0, self.max_epochs, self.checkpoint_interval)} ,
         )
 
     @property
@@ -195,16 +197,19 @@ class Learner(Task, EasyLogger):
         return self.checkpointspath / "last"
 
     def execute(self):
+        # 1. Launch Fabric
         fabric = L.Fabric(
             accelerator=self.accelerator,
             devices=self.devices,
             strategy=self.strategy,
-            num_nodes=1,
-            loggers=[],
+            precision=self.precision
         )
-        fabric.run(self.train)
+        fabric.launch()
+        
+        # 2. Fabric-aware execution = We pass fabric down instead of DeviceInformation
+        self.fabric_execute(fabric)
 
-    def train(self, device_information: DeviceInformation):
+    def fabric_execute(self, fabric: L.Fabric):
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         for handler in logger.handlers:
@@ -213,7 +218,6 @@ class Learner(Task, EasyLogger):
         self.optimizer = ScheduledOptimizer()
         self.only_cached = False
         self.context = TrainerContext(
-            device_information,
             self.logpath,
             self.checkpointspath,
             self.max_epochs,
@@ -221,18 +225,22 @@ class Learner(Task, EasyLogger):
             self.trainer,
             self.model,
             self.optimizer,
+            fabric=fabric,
         )
 
         for hook in self.hooks:
             self.context.add_hook(hook)
 
-        # Call hooks
-        foreach(
-            self.context.hooks(InitializationHook),
-            lambda hook: hook.before(self.context),
-        )
+        # Call init hooks
+        for hook in self.context.hooks(InitializationHook):
+            hook.before(self.context)
 
         # Sets the random seed
+        # WARNING - will still not be fully deterministic unless using (lot slower):
+        # - torch.use_deterministic_algorithms(True) (PyTorch ≥1.8). 
+        # - torch.backends.cudnn.deterministic = True
+        # - torch.backends.cudnn.benchmark = False.
+        # can also use fabric.seed_everything(self.random.state.randint((2**32) - 1))
         seed = self.random.state.randint((2**32) - 1)
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -247,23 +255,25 @@ class Learner(Task, EasyLogger):
         for listener in self.listeners:
             listener.initialize(self, self.context)
 
-        self.logger.info("Moving model to device %s", device_information.device)
-        self.model.to(device_information.device)
-        self.trainer.to(device_information.device)
+        self.logger.info("Moving model to device %s", fabric.device)
+        
+
         num_training_steps = self.max_epochs * self.steps_per_epoch
+
         self.optimizer.initialize(
             self.optimizers,
             num_training_steps,
             self.model,
-            self.use_fp16,
+            use_scaler=False,
             hooks=[hook for hook in self.hooks if isinstance(hook, OptimizationHook)],
             trainer_context=self.context,
         )
+        
+        #wrap model and optimizers
+        self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
 
-        foreach(
-            self.context.hooks(InitializationHook),
-            lambda hook: hook.after(self.context),
-        )
+        for hook in self.context.hooks(InitializationHook):
+            hook.after(self.context)
 
         self.logger.info("Starting to train")
 
@@ -273,7 +283,7 @@ class Learner(Task, EasyLogger):
         with tqdm(
             total=self.max_epochs, desc=f"Training ({self.max_epochs} epochs)"
         ) as tqdm_epochs:
-            for state in self.iter_train(device_information):
+            for state in self.iter_train(fabric):
                 # Report progress
                 tqdm_epochs.update(state.epoch - current)
                 current = state.epoch
@@ -300,7 +310,7 @@ class Learner(Task, EasyLogger):
                     decision = decision.update(listener(state))
 
                 if decision == LearnerListenerStatus.STOP:
-                    self.logger.warn(
+                    self.logger.warning(
                         "stopping after epoch {epoch} ({early_stop} epochs) since "
                         "all listeners asked for it"
                     )
@@ -323,7 +333,7 @@ class Learner(Task, EasyLogger):
                     listener.update_metrics(metrics)
                 self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
 
-    def iter_train(self, device_information) -> Iterator[TrainState]:
+    def iter_train(self, fabric: L.Fabric) -> Iterator[TrainState]:
         """Train iteration"""
         # Try to load a checkpoint
 
@@ -358,18 +368,13 @@ class Learner(Task, EasyLogger):
                         try:
                             # Computes the gradient, takes a step and collect metrics
                             with self.context.step(metrics):
-                                # Call the hook epoch hook
-                                foreach(
-                                    self.context.hooks(StepTrainingHook),
-                                    lambda hook: hook.before(self.context),
-                                )
+                                
+                                # Call epoch hooks
+                                for hook in self.context.hooks(StepTrainingHook):
+                                    hook.before(self.context)
 
                                 # Computes the gradient
-                                with torch.autocast(
-                                    device_information.device.type,
-                                    enabled=self.use_fp16,
-                                ):
-                                    self.trainer.process_batch(batch)
+                                self.trainer.process_batch(batch)
 
                                 # Update metrics and counter
                                 pbar.update(1)

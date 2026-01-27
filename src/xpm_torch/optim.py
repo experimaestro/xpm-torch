@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-import threading
+import threading, logging
 from typing import Any, Callable, List, Optional, TYPE_CHECKING, Union
 from pathlib import Path
 import numpy as np
@@ -18,17 +18,17 @@ from experimaestro import (
 )
 from experimaestro.scheduler import Job, Listener
 from experimaestro.utils import cleanupdir
-from xpmir.utils.logging import easylog, LazyJoin
+from xpm_torch.utils.logging import LazyJoin
 from experimaestro.scheduler.services import WebService
-from xpmir.context import Hook, Context
-from xpmir.utils.utils import Initializable, foreach
+from xpm_torch.context import Hook, Context
+from xpm_torch.utils.utils import Initializable, foreach
 from xpm_torch.metrics import ScalarMetric
 from .schedulers import Scheduler
 
 if TYPE_CHECKING:
-    from xpm_torch.context import TrainerContext
+    from xpm_torch.trainers import TrainerContext
 
-logger = easylog()
+logger = logging.getLogger(__name__)
 
 
 class Optimizer(Config):

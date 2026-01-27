@@ -1,31 +1,28 @@
-import json
-import os
-import torch
-from torch.utils.tensorboard.writer import SummaryWriter
+from typing import (
+    List,
+    Optional,
+    TYPE_CHECKING,
+)
 from pathlib import Path
-from typing import List, NamedTuple, Optional, TYPE_CHECKING
+import os, json, torch, logging
+
+from torch.utils.tensorboard.writer import SummaryWriter
 from shutil import rmtree
-from xpm_torch.context import Hook, InitializationHook
-from xpm_torch.utils.logging import easylog
-from xpm_torch.metrics import Metric, Metrics
-from xpmir.learning.devices import DeviceInformation, ComputationContext
-from experimaestro.utils import cleanupdir
 from contextlib import contextmanager
+import lightning as L
+
+from experimaestro.utils import cleanupdir
+from xpm_torch.context import InitializationHook, Hook, Context
+from xpm_torch.metrics import Metric, Metrics
+from xpm_torch.losses import Loss
+
 
 if TYPE_CHECKING:
-    from xpm_torch.optim import Module, ScheduledOptimizer
+    from xpm_torch.learner import ScheduledOptimizer, Module
     from xpm_torch.trainers import Trainer
 
+logger = logging.getLogger("xpm_torch.trainer.context")
 
-logger = easylog()
-
-
-class Loss(NamedTuple):
-    """A loss"""
-
-    name: str
-    value: torch.Tensor
-    weight: float
 
 class TrainState:
     """Represents a training state for serialization"""
@@ -144,8 +141,7 @@ class InitializationTrainingHook(TrainingHook, InitializationHook):
     def before(self, state: "TrainerContext"):
         pass
 
-
-class TrainerContext(ComputationContext):
+class TrainerContext(Context):
     """Contains all the information about the training context
     for a spefic
 
@@ -167,7 +163,6 @@ class TrainerContext(ComputationContext):
 
     def __init__(
         self,
-        device_information: DeviceInformation,
         logpath: Path,
         path: Path,
         max_epoch: int,
@@ -175,9 +170,9 @@ class TrainerContext(ComputationContext):
         trainer,
         model: "Module",
         optimizer: "ScheduledOptimizer",
+        fabric: L.Fabric,
     ):
         super().__init__()
-        self.device_information = device_information
         self.path = path
         self.logpath = logpath
         self.max_epoch = max_epoch
@@ -185,6 +180,7 @@ class TrainerContext(ComputationContext):
         self._writer = None
         self._scope = []
         self._losses = None
+        self.fabric = fabric
 
         self.state = TrainState(model, trainer, optimizer)
 
@@ -242,9 +238,13 @@ class TrainerContext(ComputationContext):
 
         return False
 
+    @staticmethod
+    def get_checkpoint_path(checkpointspath: Path, epoch: int) -> Path:
+        return checkpointspath / f"{TrainerContext.PREFIX}{epoch:08d}"
+
     def save_checkpoint(self):
         # Serialize
-        path = self.path / f"{TrainerContext.PREFIX}{self.epoch:08d}"
+        path = TrainerContext.get_checkpoint_path(self.path, self.epoch)
         if self.state.path is not None:
             # No need to save twice
             return
@@ -300,6 +300,12 @@ class TrainerContext(ComputationContext):
             metrics.merge(self.metrics)
         finally:
             self.metrics = None
+
+    def backward(self, loss: torch.Tensor):
+        if self.fabric:
+            self.fabric.backward(loss)
+        else:
+            loss.backward()
 
     def add_metric(self, metric: Metric):
         assert self.metrics is not None, "Not within an optimization step"

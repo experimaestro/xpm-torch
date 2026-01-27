@@ -8,11 +8,11 @@ from typing import (
     Union,
     Sequence,
 )
+import logging
 from experimaestro import Config
 from pytorch_lightning.utilities.memory import garbage_collection_cuda
-from xpm_torch.utils.logging import easylog
 
-logger = easylog()
+logger = logging.getLogger("xpm_torch.batchers")
 
 RT = TypeVar("RT")
 T = TypeVar("T")
@@ -55,7 +55,7 @@ class Reducer(Protocol, Generic[T, RT, ARGS, KWARGS]):
 
 class BatcherWorker:
     def __init__(self, batch_size: int):
-        self.batch_size = batch_size
+        self.batch_size = batch_size #actually a micro-batch size, may be adapted dynamically
 
     def process_withreplay(
         self,
@@ -84,8 +84,10 @@ class BatcherWorker:
         reprocess previously processed samples.
 
         Arguments:
-
-            raise_oom: Raise an OOM exception when an OOM is recoverable
+            batch: The data to process
+            process: The processing function
+            raise_oom: Raise an OOM exception when an OOM is recoverable instead
+            of continuing
         """
         process(batch, *args, **kwargs)
 
@@ -168,7 +170,7 @@ class PowerAdaptativeBatcherWorker(BatcherWorker):
         super().__init__(batch_size)
         self.max_batch_size = batch_size
         self.current_divider = 1
-        logger.info("Adaptative batcher: initial batch size is %d", self.batch_size)
+        logger.info("[xpm_torch] Adaptative batcher: initial batch size is %d", self.batch_size)
 
     def get_ranges(self, batch_size):
         ranges = []

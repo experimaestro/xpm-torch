@@ -5,7 +5,8 @@ from typing import (
     Union,
     Optional,
 )
-import torch, os, json, logging, shutil
+from pathlib import Path
+import torch, os, logging, shutil
 import torch.nn as nn
 from experimaestro.core.arguments import Meta
 from experimaestro import (
@@ -19,14 +20,14 @@ from experimaestro import (
     deserialize,
 )
 from experimaestro.core.context import SerializedPath
-from pathlib import Path
 from huggingface_hub import ModelHubMixin, snapshot_download, hf_hub_download
 
+from xpm_torch import Module #from xpm_torch.optim import Module
 
 T = TypeVar("T", bound="xpmTorchHubModule")
 
 
-class xpmTorchHubModule(Config, nn.Module, ModelHubMixin):
+class xpmTorchHubModule(Module, ModelHubMixin):
     """
     Generic PyTorch module for experimaestro, 
     compatible with Hugging Face Hub via [ModelHubMixin](https://huggingface.co/docs/huggingface_hub/en/package_reference/mixins).
@@ -94,13 +95,31 @@ class xpmTorchHubModule(Config, nn.Module, ModelHubMixin):
         """Initialize the module. Child classes should override this method to initialize their layers and other stuff."""
         super().__post_init__()
         
+    def extra_repr(self):
+        res = super().extra_repr()
+        if hasattr(self, "_parameters"):
+            res += f", n_params={self.count_parameters()}"
+        return res
 
+    def __repr__(self) -> str:
+        """Force nn.Module style repr instead of Config.__repr__."""
+        if hasattr(self, "_modules"):
+            return nn.Module.__repr__(self)
+        return super().__repr__()
+
+    # this is a nice to have but causes issues with some libraries expecting Config style strings
+    # def __str__(self) -> str:
+    #     """Force nn.Module style repr instead of Config.__str__."""
+    #     return self.__repr__()
+    
     @property
     def device(self):
         return next(self.parameters()).device
 
     def count_parameters(self):
         """Count the number of parameters in the model"""
+        if not hasattr(self, "_parameters"):
+            return 0
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     # def save_pretrained(
@@ -147,7 +166,7 @@ class xpmTorchHubModule(Config, nn.Module, ModelHubMixin):
 
         # # finally delete temporary files
         # params_path.unlink(missing_ok=True)
-
+    
     @classmethod
     def _from_pretrained(
         cls: Type[T],

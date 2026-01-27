@@ -1,13 +1,11 @@
+import logging
 from typing import Callable, ParamSpec
 from experimaestro import Config, Param, Meta
-from xpm_torch.utils.logging import easylog
 import lightning.fabric.strategies as strategies
 import lightning as L
-
-logger = easylog()
+logger = logging.getLogger("xpm_torch.configuration")
 
 P = ParamSpec("P")
-
 
 class Strategy(Config, strategies.Strategy):
     pass

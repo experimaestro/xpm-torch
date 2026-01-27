@@ -12,22 +12,25 @@ from experimaestro.utils import cleanupdir
 from xpm_torch.utils.logging import easylog
 from experimaestro.scheduler.services import WebService
 
-logger = easylog()
+logger = logging.getLogger(__name__)
 
 class TensorboardServiceListener(Listener):
     def __init__(self, source: Path, target: Path):
         self.source = source
         self.target = target
+        if not self.target.exists():
+            logger.info("Creating tensorboard target directory %s", self.target)
+            self.target.mkdir(parents=True, exist_ok=True)
 
     def job_state(self, job: Job):
-        if not job.state.notstarted():
-            if not self.source.is_symlink():
-                try:
-                    self.source.symlink_to(self.target)
-                except Exception:
-                    logger.exception(
-                        "Cannot symlink %s to %s", self.source, self.target
-                    )
+        #create symlink even if job has not been launched yet
+        if not self.source.is_symlink():
+            try:
+                self.source.symlink_to(self.target)
+            except Exception:
+                logger.exception(
+                    "Cannot symlink %s to %s", self.source, self.target
+                )
 
 
 class TensorboardService(WebService):
@@ -62,7 +65,7 @@ class TensorboardService(WebService):
                             "cannot link to tensorboard data"
                         )
                 else:
-                    logger.debug("No scheduler: not adding the tensorboard data")
+                    logger.warning("No scheduler: not adding the tensorboard data")
             else:
                 logger.error(
                     "Task was not started: cannot link to tensorboard job path"

@@ -1,11 +1,9 @@
 from experimaestro import Param
 from xpm_torch.parameters import ParametersIterator
 from xpm_torch.trainers.context import TrainState, InitializationTrainingHook
-
 import logging
-from xpm_torch.utils.logging import easylog
 
-logger = easylog()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class LayerFreezer(InitializationTrainingHook):

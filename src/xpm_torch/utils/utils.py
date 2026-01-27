@@ -19,8 +19,6 @@ from subprocess import run
 import tempfile
 from experimaestro import SubmitHook, Job, Launcher
 from threading import Thread
-from xpmir.utils.functools import cache
-from xpm_torch.utils.logging import easylog, EasyLogger  # noqa: F401
 
 T = TypeVar("T")
 
@@ -143,7 +141,6 @@ def batchiter(batchsize: int, iter: Iterator[T], keeppartial=True) -> Iterator[L
         yield samples
 
 
-@cache
 def find_java_home(min_version: int = 6) -> str:
     """Find JAVA HOME"""
     paths = []

@@ -4,8 +4,9 @@ import numpy as np
 from functools import cached_property
 from experimaestro import Config, Param
 from xpm_torch.utils.logging import EasyLogger
-from xpmir.utils.iter import SerializableIterator, BatchIteratorAdapter
+from xpm_torch.utils.iter import SerializableIterator, BatchIteratorAdapter
 
+T = TypeVar("T")
 
 class Random(Config):
     """Random configuration"""
@@ -28,7 +29,6 @@ class Sampler(Config, EasyLogger):
         self.random = random or np.random.RandomState(random.randint(0, 2**31))
 
 
-T = TypeVar("T")
 
 
 class SampleIterator(Config, Iterable[T], ABC):

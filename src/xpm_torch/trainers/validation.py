@@ -15,12 +15,12 @@ from xpm_torch.learner import (
     TrainState,
 )
 from xpm_torch.optim import ModuleLoader
-from xpmir.letor.records import BaseRecords
+from xpmir.letor.records import Records
 from xpmir.letor.trainers import LossTrainer
 from xpm_torch.metrics import Metrics, ScalarMetric
 from xpmir.utils.logging import easylog
 
-logger = easylog()
+logger = logging.getLogger(__name__)
 
 
 class TrainerValidationLoss(LearnerListener):
@@ -93,7 +93,7 @@ class TrainerValidationLoss(LearnerListener):
 
         return LearnerListenerStatus.DONT_STOP
 
-    def reducer(self, records: BaseRecords, metrics: Metrics):
+    def reducer(self, records: Records, metrics: Metrics):
         """Combines a forward and backard
 
         This method can be implemented by specific trainers that use the gradient.

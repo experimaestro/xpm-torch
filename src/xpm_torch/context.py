@@ -1,7 +1,6 @@
 import logging
-from xpm_torch.utils.logging import easylog
 
-logger = easylog()
+logger = logging.getLogger("xpm_torch.context")
 logger.setLevel(logging.INFO)
 
 
