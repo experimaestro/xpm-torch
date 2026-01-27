@@ -15,11 +15,10 @@ from xpm_torch.learner import (
     TrainState,
 )
 from xpm_torch.optim import ModuleLoader
-from xpmir.letor.records import Records
-from xpmir.letor.trainers import LossTrainer
+from xpm_torch.trainers import LossTrainer
 from xpm_torch.metrics import Metrics, ScalarMetric
-from xpmir.utils.logging import easylog
 
+import logging
 logger = logging.getLogger(__name__)
 
 

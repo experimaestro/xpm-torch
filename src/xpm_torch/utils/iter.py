@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 State = TypeVar("State")
 T = TypeVar("T")
+U = TypeVar("U")
 
 
 class iterable_of(Generic[T]):

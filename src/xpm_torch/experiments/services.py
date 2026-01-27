@@ -9,8 +9,8 @@ from experimaestro import (
 )
 from experimaestro.scheduler import Job, Listener
 from experimaestro.utils import cleanupdir
-from xpm_torch.utils.logging import easylog
 from experimaestro.scheduler.services import WebService
+import logging
 
 logger = logging.getLogger(__name__)
 
