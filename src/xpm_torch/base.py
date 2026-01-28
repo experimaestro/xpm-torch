@@ -30,7 +30,6 @@ class Sampler(Config, EasyLogger):
 
 
 
-
 class SampleIterator(Config, Iterable[T], ABC):
     """Generic class to iterate over items or batch of items"""
 
