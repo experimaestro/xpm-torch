@@ -16,7 +16,7 @@ from experimaestro import (
 )
 
 import lightning as L
-import lightning.fabric.strategies as strategies
+from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
 from xpm_torch import Random, ModuleInitMode
 from xpm_torch.metrics import Metrics
@@ -42,7 +42,7 @@ from xpm_torch.trainers import Trainer
 
 logger = logging.getLogger(__name__)
 
-class Strategy(Config, strategies.Strategy):
+class Strategy(Config, l_Strategy):
     """A Lightning strategy"""
     pass
 
