@@ -16,6 +16,7 @@ from experimaestro import (
     PathSerializationLWTask,
     experiment,
     RunMode,
+    field
 )
 from experimaestro.scheduler import Job, Listener
 from experimaestro.utils import cleanupdir
@@ -277,7 +278,7 @@ class ParameterOptimizer(Config):
     module: Param[Optional[Module]]
     """The module from which parameters should be extracted"""
 
-    filter: Param[Optional[ParameterFilter]] = ParameterFilter()
+    filter: Param[Optional[ParameterFilter]] = field(default_factory=ParameterFilter.C)
     """How parameters should be selected for this (by default, use them all)"""
 
     def create_optimizer(

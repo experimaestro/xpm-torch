@@ -8,7 +8,7 @@ class LearningExperimentHelper(ExperimentHelper):
     @cached_property
     def tensorboard_service(self) -> TensorboardService:
         """Returns a tensorboard service"""
-        return self.xp.add_service(TensorboardService(self.xp, self.xp.resultspath / "runs"))
+        return self.xp.add_service(TensorboardService(self.xp.resultspath / "runs"))
 
 
 learning_experiment = LearningExperimentHelper.decorator
