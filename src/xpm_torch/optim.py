@@ -150,6 +150,8 @@ class Module(Config, Initializable, torch.nn.Module):
     def __init__(self):
         Initializable.__init__(self)
         torch.nn.Module.__init__(self)
+        
+        self._dummy_param = torch.nn.Parameter(torch.empty(0))
 
     def __initialize__(self, options: ModuleInitOptions):
         """Initialize a module
@@ -160,6 +162,11 @@ class Module(Config, Initializable, torch.nn.Module):
 
     def __call__(self, *args, **kwargs):
         return torch.nn.Module.__call__(self, *args, **kwargs)
+
+    @property
+    def device(self):
+        return self._dummy_param.device
+        
 
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
