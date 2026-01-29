@@ -30,7 +30,7 @@ from .optim import (
 )
 from xpm_torch.context import Hook, InitializationHook
 from xpm_torch.utils.logging import EasyLogger
-from xpm_torch.configuration import Configuration
+from xpm_torch.configuration import FabricConfiguration
 
 from xpm_torch.trainers.context import (
     StepTrainingHook,
@@ -155,6 +155,7 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
     
+    #TODO Use Fabric Config instead
     # Fabric Parameters
     accelerator: Param[str] = "auto" 
     """e.g., 'gpu', 'cpu', 'tpu'"""

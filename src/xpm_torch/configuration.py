@@ -3,15 +3,17 @@ from typing import Callable, ParamSpec
 from experimaestro import Config, Param, Meta
 import lightning.fabric.strategies as strategies
 import lightning as L
+
 logger = logging.getLogger("xpm_torch.configuration")
 
 P = ParamSpec("P")
+
 
 class Strategy(Config, strategies.Strategy):
     pass
 
 
-class Configuration(Config):
+class FabricConfiguration(Config):
     """Describe the computation device
 
     The backend is fabric, so the complete documentation can be found on
@@ -21,17 +23,23 @@ class Configuration(Config):
     num_nodes: Meta[int] = 1
     """Number of nodes"""
 
-    devices: Meta[list[int] | int | str] = "auto"
+    devices: Meta[str] = "auto"
     """List of devices to use"""
 
-    strategy: Meta[str | Strategy] = "auto"
+    strategy: Meta[str] = "auto"
 
     accelerator: Meta[str] = "auto"
     """The accelerator to use"""
 
-    precision: Param[str]
-    """Precision to use"""
-    
-    def launch(self, train: Callable[P, None], *args: P.args, **kwargs: P.kwargs):
-        fabric = L.Fabric(accelerator=self.accelerator, devices=self.devices, strategy=self.strategy, num_nodes=1, loggers=[])
-        fabric.run(train)
+    precision: Param[str] = "32-true"
+    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html"""
+
+    def get_instance(self, **kwargs):
+        """instanciate the Fabric object"""
+        return L.Fabric(
+            accelerator=self.accelerator,
+            devices=self.devices,
+            strategy=self.strategy,
+            num_nodes=self.num_nodes,
+            **kwargs
+        )

@@ -1,3 +1,4 @@
+from lightning import Fabric
 from dataclasses import dataclass
 from enum import Enum
 import threading, logging
@@ -131,8 +132,8 @@ class ModuleInitMode(Enum):
     #: number generator to initialize the values)
     RANDOM = 2
 
-    def to_options(self, random: Optional[np.random.RandomState] = None):
-        return ModuleInitOptions(self, random)
+    def to_options(self, random: Optional[np.random.RandomState] = None, fabric: Optional[Fabric] = None):
+        return ModuleInitOptions(self, random, fabric=fabric)
 
 
 @dataclass
@@ -143,6 +144,8 @@ class ModuleInitOptions:
     #: Random generator (only defined when mode is RANDOM)
     random: Optional[np.random.RandomState] = None
 
+    fabric: Optional[Fabric] = None
+
 
 class Module(Config, Initializable, torch.nn.Module):
     """A module contains parameters"""
@@ -150,7 +153,7 @@ class Module(Config, Initializable, torch.nn.Module):
     def __init__(self):
         Initializable.__init__(self)
         torch.nn.Module.__init__(self)
-        
+
         self._dummy_param = torch.nn.Parameter(torch.empty(0))
 
     def __initialize__(self, options: ModuleInitOptions):
@@ -201,6 +204,20 @@ class ModuleLoader(PathSerializationLWTask):
         data = torch.load(self.path)
         self.value.load_state_dict(data)
 
+
+def find_module_attributes(obj) -> dict:
+    """
+    Finds all instances of `xpm_torch.Module` in attributes of any object.
+    """
+    found_modules = {}
+    
+    # vars(obj) returns the __dict__ of the instance
+    # We use list() to avoid "dictionary changed size" errors if needed
+    for attr_name, attr_value in vars(obj).items():
+        if isinstance(attr_value, Module):
+            found_modules[attr_name] = attr_value
+            
+    return found_modules
 
 class ParameterFilter(Config):
     """One abstract class which doesn't do the filtrage"""
