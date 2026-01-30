@@ -387,10 +387,8 @@ class Learner(Task, EasyLogger):
                             )
                             continue
 
-                    foreach(
-                        self.context.hooks(StepTrainingHook),
-                        lambda hook: hook.after(self.context),
-                    )
+                    for hook in self.context.hooks(StepTrainingHook):
+                        hook.after(self.context)
 
                 # Yields the current state (after one epoch)
                 yield self.context.state
