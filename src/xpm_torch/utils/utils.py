@@ -9,12 +9,13 @@ from typing import (
     Iterable,
     Tuple,
     Type,
+    Optional,
 )
 import inspect
 import logging
-import os
+import os, re
+import torch
 from pathlib import Path
-import re
 from subprocess import run
 import tempfile
 from experimaestro import SubmitHook, Job, Launcher
@@ -120,6 +121,14 @@ class Handler:
             handler = self.defaulthandler
 
         return handler(key)
+
+
+
+def to_device(tensor: Optional[torch.Tensor], device: torch.device):
+    """Move to device if not None"""
+    if tensor is not None:
+        return tensor.to(device)
+    return tensor
 
 
 def foreach(iterator: Iterable[T], fn: Callable[[T], None]):
