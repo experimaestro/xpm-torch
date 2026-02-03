@@ -135,7 +135,7 @@ class LossTrainer(Trainer):
         with self.context.losses() as losses:
             self.train_batch(records)
             nrecords = len(records)
-            total_loss = torch.tensor(0.0)
+            total_loss = torch.tensor(0.0, device=self.context.fabric.device)
             names = []
 
             for loss in losses:
