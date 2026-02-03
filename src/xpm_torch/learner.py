@@ -273,9 +273,10 @@ class Learner(Task, EasyLogger):
         
         #wrap model and optimizers
         self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
-
-        self.logger.info("Moved model to device %s", self.model.device)
+        self.model.to(fabric.device)
         
+        self.logger.info("Moved model to device %s", self.model.device)
+
         for hook in self.context.hooks(InitializationHook):
             hook.after(self.context)
 
