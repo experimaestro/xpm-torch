@@ -249,14 +249,15 @@ class Learner(Task, EasyLogger):
 
         # Initialize the scorer and trainer
         self.logger.info("model initialization")
-        self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
+        
+        with fabric.init_module():
+            self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
 
         # Initialize the context and the listeners
         self.trainer.initialize(self.random.state, self.context)
         for listener in self.listeners:
             listener.initialize(self, self.context)
 
-        self.logger.info("Moving model to device %s", fabric.device)
         
 
         num_training_steps = self.max_epochs * self.steps_per_epoch
@@ -273,6 +274,8 @@ class Learner(Task, EasyLogger):
         #wrap model and optimizers
         self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
 
+        self.logger.info("Moved model to device %s", self.model.device)
+        
         for hook in self.context.hooks(InitializationHook):
             hook.after(self.context)
 
