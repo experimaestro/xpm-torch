@@ -18,6 +18,7 @@ from experimaestro import (
 import lightning as L
 from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
+from xpm_torch.utils import precision_to_dtype
 from xpm_torch import Random, ModuleInitMode
 from xpm_torch.metrics import Metrics
 from .batchers import RecoverableOOMError
@@ -250,8 +251,8 @@ class Learner(Task, EasyLogger):
         # Initialize the scorer and trainer
         self.logger.info("model initialization")
         
-        with fabric.init_module():
-            self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
+        
+        self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
 
         # Initialize the context and the listeners
         self.trainer.initialize(self.random.state, self.context)
@@ -273,7 +274,9 @@ class Learner(Task, EasyLogger):
         
         #wrap model and optimizers
         self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
-        self.model.to(fabric.device)
+        
+        self.model = fabric.strategy.precision.convert_module(self.model)
+        self.model.to(dtype=precision_to_dtype[fabric._precision.precision])
         
         self.logger.info("Moved model to device %s", self.model.device)
 
