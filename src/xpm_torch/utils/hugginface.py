@@ -1,30 +1,80 @@
+from functools import lru_cache
 from pathlib import Path
 import json
 from typing import Optional
 from huggingface_hub import hf_hub_download
-from huggingface_hub.errors import EntryNotFoundError
+from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def check_hf_cache(model_id):
-    """Check if the model is already downloaded in the cache
+@lru_cache
+def check_model(model_id: str) -> bool:
+    """Check if model and tokenizer are in cache, if not, download all necessary files.
+
     Args:
-        model_id: the id of the model to check
+        model_id: The ID of the model to check.
+
     Returns:
-        True if the model is already downloaded, False otherwise
+        True if both model and tokenizer are in cache or after downloading, False if download fails.
     """
-    # check if the model is already downloaded
+    model_in_cache = check_hf_cache(model_id, is_model=True)
+    tokenizer_in_cache = check_hf_cache(model_id, is_model=False)
 
-    try:
-        # Try downloading the config (or another known file)
-        hf_hub_download(repo_id=model_id, filename="config.json", local_files_only=True)
+    if model_in_cache and tokenizer_in_cache:
+        logger.info(f"Model and tokenizer for {model_id} are already in cache.")
         return True
+    else:
+        logger.info(f"Downloading missing files for {model_id}...")
+        try:
+            # Download model files if not in cache
+            if not model_in_cache:
+                for filename in ["config.json", "pytorch_model.bin", "tf_model.h5", "model.safetensors"]:
+                    try:
+                        hf_hub_download(repo_id=model_id, filename=filename)
+                    except (EntryNotFoundError, RepositoryNotFoundError):
+                        continue
 
-    except EntryNotFoundError:
-        # If the file is not found, the model is not downloaded
-        return False
+            # Download tokenizer files if not in cache
+            if not tokenizer_in_cache:
+                for filename in ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt"]:
+                    try:
+                        hf_hub_download(repo_id=model_id, filename=filename)
+                    except (EntryNotFoundError, RepositoryNotFoundError):
+                        continue
+
+            logger.info(f"Successfully downloaded missing files for {model_id}.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to download files for {model_id}: {e}")
+            return False
+
+def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
+    """Check if the model or tokenizer is already downloaded in the cache.
+
+    Args:
+        model_id: The ID of the model or tokenizer to check.
+        is_model: If True, checks for model files. If False, checks for tokenizer files.
+
+    Returns:
+        True if the model or tokenizer is already downloaded, False otherwise.
+    """
+    model_files = ["config.json", "pytorch_model.bin", "tf_model.h5", "model.safetensors"]
+    tokenizer_files = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt"]
+
+    files_to_check = model_files if is_model else tokenizer_files
+
+    for filename in files_to_check:
+        try:
+            hf_hub_download(repo_id=model_id, filename=filename, local_files_only=True)
+            return True
+        except (EntryNotFoundError, RepositoryNotFoundError):
+            continue
+
+    return False
+
+
 
 def get_hf_config(repo_id):
     """ pull config from HF, don't need to import transformers"""
