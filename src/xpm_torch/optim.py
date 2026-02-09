@@ -22,6 +22,7 @@ from experimaestro.scheduler import Job, Listener
 from experimaestro.utils import cleanupdir
 from experimaestro.scheduler.services import WebService
 
+from xpm_torch.utils import precision_to_dtype
 from xpm_torch.utils.logging import LazyJoin
 from xpm_torch.context import Hook, Context
 from xpm_torch.utils.utils import Initializable, foreach
@@ -155,7 +156,6 @@ class Module(Config, Initializable, torch.nn.Module):
         Initializable.__init__(self)
         torch.nn.Module.__init__(self)
 
-        self._dummy_param = torch.nn.Parameter(torch.empty(0))
 
     def __initialize__(self, options: ModuleInitOptions):
         """Initialize a module
@@ -169,7 +169,7 @@ class Module(Config, Initializable, torch.nn.Module):
 
     @property
     def device(self):
-        return self._dummy_param.device
+        return next(self.parameters()).device
         
 
     def to(self, *args, **kwargs):
