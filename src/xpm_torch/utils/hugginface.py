@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 import json
 from typing import Optional
-from huggingface_hub import hf_hub_download
+from huggingface_hub import snapshot_download, hf_hub_download
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 import logging
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache
-def check_model(model_id: str) -> bool:
+def prepare_hf_model(model_id: str) -> bool:
     """Check if model and tokenizer are in cache, if not, download all necessary files.
 
     Args:
@@ -22,6 +22,7 @@ def check_model(model_id: str) -> bool:
     model_in_cache = check_hf_cache(model_id, is_model=True)
     tokenizer_in_cache = check_hf_cache(model_id, is_model=False)
 
+    logger.info(f"Preparing model {model_id} ...")
     if model_in_cache and tokenizer_in_cache:
         logger.info(f"Model and tokenizer for {model_id} are already in cache.")
         return True
@@ -30,20 +31,12 @@ def check_model(model_id: str) -> bool:
         try:
             # Download model files if not in cache
             if not model_in_cache:
-                for filename in ["config.json", "pytorch_model.bin", "tf_model.h5", "model.safetensors"]:
-                    try:
-                        hf_hub_download(repo_id=model_id, filename=filename)
-                    except (EntryNotFoundError, RepositoryNotFoundError):
-                        continue
+                snapshot_download(repo_id=model_id)
 
             # Download tokenizer files if not in cache
             if not tokenizer_in_cache:
-                for filename in ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt"]:
-                    try:
-                        hf_hub_download(repo_id=model_id, filename=filename)
-                    except (EntryNotFoundError, RepositoryNotFoundError):
-                        continue
-
+                snapshot_download(repo_id=model_id)
+                
             logger.info(f"Successfully downloaded missing files for {model_id}.")
             return True
         except Exception as e:
@@ -73,7 +66,6 @@ def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
             continue
 
     return False
-
 
 
 def get_hf_config(repo_id):
