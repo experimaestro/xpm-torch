@@ -1,3 +1,4 @@
+from functools import lru_cache
 from pathlib import Path
 import json
 from typing import Optional
@@ -7,8 +8,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+@lru_cache
+def check_model(model_id: str):
+    """Check ifs model and tokenizer are in cache, if not, dowload them"""
+    if check_hf_cache(model_id):
+        logger.info("..")
+    else:
+        pass
 
-def check_hf_cache(model_id):
+def check_hf_cache(model_id) -> bool:
     """Check if the model is already downloaded in the cache
     Args:
         model_id: the id of the model to check
