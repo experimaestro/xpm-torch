@@ -332,65 +332,65 @@ class Learner(Task, EasyLogger):
                 # If every listener exposes a `top` dict with an `epoch` field and
                 # none of them improved during the last `early_stop_epochs` epochs,
                 # stop training.
-                if getattr(self, "early_stop_epochs", 0) > 0:
-                    stalled_flags = []
-                    for listener in self.listeners:
-                        if self.target_listerner_early_stopping and listener.id != self.target_listerner_early_stopping:
-                            continue
-                        top = getattr(listener, "top", None)
-                        # listener.metrics is expected to be a dict like {'RR@10': True, 'AP': False}
-                        listener_metrics = getattr(listener, "metrics", None)
+                # if getattr(self, "early_stop_epochs", 0) > 0:
+                #     stalled_flags = []
+                #     for listener in self.listeners:
+                #         if self.target_listerner_early_stopping and listener.id != self.target_listerner_early_stopping:
+                #             continue
+                #         top = getattr(listener, "top", None)
+                #         # listener.metrics is expected to be a dict like {'RR@10': True, 'AP': False}
+                #         listener_metrics = getattr(listener, "metrics", None)
 
-                        # If there is no top info, we cannot consider this listener stalled.
-                        if not top:
-                            stalled_flags.append(False)
-                            continue
+                #         # If there is no top info, we cannot consider this listener stalled.
+                #         if not top:
+                #             stalled_flags.append(False)
+                #             continue
 
-                        # If no per-metric tracking info is provided, maybe we could just skip the early_stop check
-                        if not listener_metrics:
-                            # try:
-                            #     last_impr = int(top.get("epoch", state.epoch))
-                            # except Exception:
-                            #     stalled_flags.append(False)
-                            #     continue
+                #         # If no per-metric tracking info is provided, maybe we could just skip the early_stop check
+                #         if not listener_metrics:
+                #             # try:
+                #             #     last_impr = int(top.get("epoch", state.epoch))
+                #             # except Exception:
+                #             #     stalled_flags.append(False)
+                #             #     continue
 
-                            # epochs_since_imp = state.epoch - last_impr
-                            # stalled_flags.append(epochs_since_imp >= self.early_stop_epochs)
-                            continue
+                #             # epochs_since_imp = state.epoch - last_impr
+                #             # stalled_flags.append(epochs_since_imp >= self.early_stop_epochs)
+                #             continue
 
-                        # Collect last improvement epochs only for metrics that the listener tracks
-                        tracked_epochs: List[int] = []
-                        for metric_name, track in listener_metrics.items():
-                            if not track:
-                                continue
-                            if metric_name in top:
-                                entry = top[metric_name]
-                                try:
-                                    if isinstance(entry, dict) and "epoch" in entry:
-                                        tracked_epochs.append(int(entry["epoch"]))
-                                    else:
-                                        # entry might be a scalar epoch or value; try to coerce
-                                        tracked_epochs.append(int(entry))
-                                except Exception:
-                                    # ignore this metric if its format is unexpected
-                                    continue
+                #         # Collect last improvement epochs only for metrics that the listener tracks
+                #         tracked_epochs: List[int] = []
+                #         for metric_name, track in listener_metrics.items():
+                #             if not track:
+                #                 continue
+                #             if metric_name in top:
+                #                 entry = top[metric_name]
+                #                 try:
+                #                     if isinstance(entry, dict) and "epoch" in entry:
+                #                         tracked_epochs.append(int(entry["epoch"]))
+                #                     else:
+                #                         # entry might be a scalar epoch or value; try to coerce
+                #                         tracked_epochs.append(int(entry))
+                #                 except Exception:
+                #                     # ignore this metric if its format is unexpected
+                #                     continue
 
-                        # If none of the tracked metrics have recorded epochs, assume not stalled
-                        if not tracked_epochs:
-                            stalled_flags.append(False)
-                            continue
+                #         # If none of the tracked metrics have recorded epochs, assume not stalled
+                #         if not tracked_epochs:
+                #             stalled_flags.append(False)
+                #             continue
 
-                        last_impr = max(tracked_epochs)
-                        epochs_since_imp = state.epoch - last_impr
-                        stalled_flags.append(epochs_since_imp >= self.early_stop_epochs)
+                #         last_impr = max(tracked_epochs)
+                #         epochs_since_imp = state.epoch - last_impr
+                #         stalled_flags.append(epochs_since_imp >= self.early_stop_epochs)
 
-                    if all(stalled_flags):
-                        self.logger.warning(
-                            "stopping after epoch %s (hard stop=%s) - all listeners stalled",
-                            state.epoch,
-                            self.early_stop_epochs,
-                        )
-                        break
+                #     if all(stalled_flags):
+                #         self.logger.warning(
+                #             "stopping after epoch %s (hard stop=%s) - all listeners stalled",
+                #             state.epoch,
+                #             self.early_stop_epochs,
+                #         )
+                #         break
 
                 # Stop if max epoch is reached
                 if self.context.epoch >= self.max_epochs:
