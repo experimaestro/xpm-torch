@@ -171,7 +171,7 @@ class Learner(Task, EasyLogger):
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation"""
 
     # Hard-coded global early stopping threshold (in epochs)
-    early_stop_epochs: Meta[int] = 100
+    early_stop_epochs: Meta[int] = 300
     """If all listeners have not improved for this many epochs, stop training.""" 
 
     target_listerner_early_stopping: Meta[Optional[str]] = "aggregated_validation"
