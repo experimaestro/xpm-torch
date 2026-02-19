@@ -21,16 +21,22 @@ class TensorboardServiceListener(Listener):
         if not self.target.exists():
             logger.info("Creating tensorboard target directory %s", self.target)
             self.target.mkdir(parents=True, exist_ok=True)
+        
+        #for now create symlink as soon as the job is added to TensorBoard Service
+        self.create_symlink()
 
-    def job_state(self, job: Job):
+    def create_symlink(self):
+        """Create Symlink from task runpath to """
         #create symlink even if job has not been launched yet
         if not self.source.is_symlink():
             try:
                 self.source.symlink_to(self.target)
+                logger.info(f"Symlinked job runpath to {self.target}")
             except Exception:
                 logger.exception(
                     "Cannot symlink %s to %s", self.source, self.target
                 )
+
 
 
 class TensorboardService(WebService):

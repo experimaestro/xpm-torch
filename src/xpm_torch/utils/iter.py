@@ -79,9 +79,16 @@ class SerializableIteratorAdapter(SerializableIterator[T, State], Generic[T, U, 
 class BatchIteratorAdapter(SerializableIterator[List[T], State]):
     """Adapts a serializable iterator into a batchwise serializable iterator"""
 
-    def __init__(self, iterator: SerializableIterator[T, State], size: int):
+    def __init__(self, iterator: SerializableIterator[T, State], size: int, keep_last_batch: bool = True):
+        """_summary_
+
+        :param SerializableIterator[T, State] iterator: iterator to adapt
+        :param int size: size of the batches
+        :param bool keep_last_batch: whether to keep the last batch if it is smaller than the specified size, defaults to True
+        """
         self.iterator = iterator
         self.size = size
+        self.keep_last_batch = keep_last_batch
 
     def state_dict(self):
         return self.iterator.state_dict()
@@ -96,6 +103,10 @@ class BatchIteratorAdapter(SerializableIterator[List[T], State]):
         batch = []
         for _, record in zip(range(self.size), self.iterator):
             batch.append(record)
+        if not batch:
+            raise StopIteration()
+        if len(batch) < self.size and not self.keep_last_batch:
+            raise StopIteration()
         return batch
 
 

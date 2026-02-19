@@ -1,5 +1,6 @@
 from enum import Enum
 import logging
+from time import perf_counter, time
 import torch
 import numpy as np
 from pathlib import Path
@@ -19,7 +20,7 @@ import lightning as L
 from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
 from xpm_torch import Random, ModuleInitMode
-from xpm_torch.metrics import Metrics
+from xpm_torch.metrics import Metrics, ScalarMetric
 from .batchers import RecoverableOOMError
 from .optim import (
     Module,
@@ -155,7 +156,7 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
     
-    #TODO Use Fabric Config instead
+    #TODO Use Fabric Config instead -> changes the id...
     # Fabric Parameters
     accelerator: Param[str] = "auto" 
     """e.g., 'gpu', 'cpu', 'tpu'"""
@@ -166,9 +167,19 @@ class Learner(Task, EasyLogger):
     strategy: Param[str] = "auto" # e.g., 'ddp', 'fsdp'
     """Strategy to use for distributed training, see Lightning documentation"""
 
+    #TODO - auto set it based on the precision ?
+    torch_fp32_precision: Param[str] = "high"
+    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision"""
+
     precision: Param[str] = "32-true" 
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation"""
-    
+
+    # Hard-coded global early stopping threshold (in epochs)
+    early_stop_epochs: Meta[int] = 100
+    """If all listeners have not improved for this many epochs, stop training.""" 
+
+    target_listerner_early_stopping: Meta[Optional[str]] = "aggregated_validation"
+    """If set, only consider this listener for early stopping"""  
 
     def __validate__(self):
         assert self.optimizers, "At least one optimizer should be defined"
@@ -198,6 +209,14 @@ class Learner(Task, EasyLogger):
         return self.checkpointspath / "last"
 
     def execute(self):
+        """ Main Training loop, executed using the fabric context.
+        the training process is stopped either by 
+         - the listeners 
+         - max_epoch reached
+        """
+        self.logger.info(f"Setting fp32 matmul precision to {self.torch_fp32_precision}")
+        torch.set_float32_matmul_precision(self.torch_fp32_precision)
+
         # 1. Launch Fabric
         fabric = L.Fabric(
             accelerator=self.accelerator,
@@ -206,18 +225,11 @@ class Learner(Task, EasyLogger):
             precision=self.precision
         )
         fabric.launch()
-        
-        # 2. Fabric-aware execution = We pass fabric down instead of DeviceInformation
-        self.fabric_execute(fabric)
-
-    def fabric_execute(self, fabric: L.Fabric):
-        logger = logging.getLogger()
-        logger.setLevel(logging.INFO)
-        for handler in logger.handlers:
-            handler.setLevel(logging.INFO)
 
         self.optimizer = ScheduledOptimizer()
+
         self.only_cached = False
+        
         self.context = TrainerContext(
             self.logpath,
             self.checkpointspath,
@@ -249,10 +261,13 @@ class Learner(Task, EasyLogger):
 
         # Initialize the scorer and trainer
         self.logger.info("model initialization")
-        self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
+        
+        with fabric.init_module():#empty_init=True):
+            self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
 
-        # Initialize the context and the listeners
-        self.trainer.initialize(self.random.state, self.context)
+            # Initialize the context and the listeners
+            self.trainer.initialize(self.random.state, self.context)
+
         for listener in self.listeners:
             listener.initialize(self, self.context)
 
@@ -271,6 +286,16 @@ class Learner(Task, EasyLogger):
         
         #wrap model and optimizers
         self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
+        
+        self.logger.info(f"Model is on device {self.model.device} using dtype {next(self.model.parameters()).dtype}")
+
+        if torch.cuda.is_available():
+            # This is the definitive check for BF16 support
+            supports_bf16 = torch.cuda.is_bf16_supported()
+            self.logger.info(f"Hardware supports BF16: {supports_bf16}")
+            
+            if not supports_bf16 and "bf16" in fabric.precision.precision:
+                self.logger.error("CRITICAL: You are forcing BF16 on incompatible hardware!")
 
         for hook in self.context.hooks(InitializationHook):
             hook.after(self.context)
@@ -336,7 +361,8 @@ class Learner(Task, EasyLogger):
                 self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
 
     def iter_train(self, fabric: L.Fabric) -> Iterator[TrainState]:
-        """Train iteration"""
+        """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps
+        """
         # Try to load a checkpoint
 
         if self.context.load_bestcheckpoint(self.max_epochs):
@@ -361,6 +387,7 @@ class Learner(Task, EasyLogger):
 
                 # Epoch: loop over batches
                 metrics = Metrics()
+                start = perf_counter()
                 for b in range(self.steps_per_epoch):
                     # Get the next batch
                     batch = next(iter)
@@ -390,11 +417,16 @@ class Learner(Task, EasyLogger):
 
                     for hook in self.context.hooks(StepTrainingHook):
                         hook.after(self.context)
-
-                # Yields the current state (after one epoch)
+                
+                metrics.add(
+                    ScalarMetric("iter_per_seconds", self.steps_per_epoch / (perf_counter() - start), 1)
+                )
+                # Yields the current state (after one epoch) 
+                # -> allows listeners to process it and decide whether to stop or not
                 yield self.context.state
 
-                # Report metrics over the epoch
+                # Report metrics over the epoch, and log them in tensorboard
+                # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
                 metrics.report(
                     self.context.state.step,
                     self.context.writer,

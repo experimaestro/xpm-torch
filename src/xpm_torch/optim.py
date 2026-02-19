@@ -155,7 +155,6 @@ class Module(Config, Initializable, torch.nn.Module):
         Initializable.__init__(self)
         torch.nn.Module.__init__(self)
 
-        self._dummy_param = torch.nn.Parameter(torch.empty(0))
 
     def __initialize__(self, options: ModuleInitOptions):
         """Initialize a module
@@ -169,7 +168,7 @@ class Module(Config, Initializable, torch.nn.Module):
 
     @property
     def device(self):
-        return self._dummy_param.device
+        return next(self.parameters()).device
         
 
     def to(self, *args, **kwargs):
@@ -203,6 +202,12 @@ class ModuleLoader(PathSerializationLWTask):
         logger.info("Loading model from disk: %s", self.path)
         self.value.initialize(ModuleInitMode.NONE.to_options())
         data = torch.load(self.path)
+
+        # Check if model has the dummy param; if not, remove it from data
+        if "_dummy_param" in data and "_dummy_param" not in self.value.state_dict():
+            logger.debug("Ignoring '_dummy_param' as it is not present in the model architecture.")
+            data.pop("_dummy_param")
+            
         self.value.load_state_dict(data)
 
 
@@ -358,6 +363,7 @@ class GradientLogHook(GradientHook):
                     n_params += param.grad.numel()
                     sum_norms += param.grad.numel() * param.grad.norm() ** 2
 
+        assert n_params > 0, "No parameters with gradients found for logging the gradient norm"
         main.trainer_context.writer.add_scalar(
             self.name, sum_norms / n_params, main.trainer_context.state.step
         )
