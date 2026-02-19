@@ -68,7 +68,7 @@ def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
     return False
 
 
-def get_hf_config(repo_id):
+def get_hf_config(repo_id: str) -> dict:
     """ pull config from HF, don't need to import transformers"""
     # Download the config.json file to your local cache
     config_path = hf_hub_download(repo_id=repo_id, filename="config.json")

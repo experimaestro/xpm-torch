@@ -32,7 +32,9 @@ class FabricConfiguration(Config):
     """The accelerator to use"""
 
     precision: Param[str] = "32-true"
-    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html"""
+    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': 
+    see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
+    """
 
     def get_instance(self, **kwargs):
         """instanciate the Fabric object"""

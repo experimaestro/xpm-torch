@@ -22,7 +22,6 @@ from experimaestro.scheduler import Job, Listener
 from experimaestro.utils import cleanupdir
 from experimaestro.scheduler.services import WebService
 
-from xpm_torch.utils import precision_to_dtype
 from xpm_torch.utils.logging import LazyJoin
 from xpm_torch.context import Hook, Context
 from xpm_torch.utils.utils import Initializable, foreach

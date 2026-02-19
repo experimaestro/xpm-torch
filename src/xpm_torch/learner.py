@@ -18,7 +18,6 @@ from experimaestro import (
 import lightning as L
 from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
-from xpm_torch.utils import precision_to_dtype
 from xpm_torch import Random, ModuleInitMode
 from xpm_torch.metrics import Metrics
 from .batchers import RecoverableOOMError
@@ -156,7 +155,7 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
     
-    #TODO Use Fabric Config instead
+    #TODO Use Fabric Config instead -> changes the id...
     # Fabric Parameters
     accelerator: Param[str] = "auto" 
     """e.g., 'gpu', 'cpu', 'tpu'"""
@@ -166,6 +165,10 @@ class Learner(Task, EasyLogger):
 
     strategy: Param[str] = "auto" # e.g., 'ddp', 'fsdp'
     """Strategy to use for distributed training, see Lightning documentation"""
+
+    #TODO - auto set it based on the precision ?
+    torch_fp32_precision: Param[str] = "high"
+    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision"""
 
     precision: Param[str] = "32-true" 
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation"""
@@ -205,6 +208,9 @@ class Learner(Task, EasyLogger):
         return self.checkpointspath / "last"
 
     def execute(self):
+        self.logger.info(f"Setting fp32 matmul precision to {self.torch_fp32_precision}")
+        torch.set_float32_matmul_precision(self.torch_fp32_precision)
+
         # 1. Launch Fabric
         fabric = L.Fabric(
             accelerator=self.accelerator,
@@ -214,7 +220,7 @@ class Learner(Task, EasyLogger):
         )
         fabric.launch()
         
-        # 2. Fabric-aware execution = We pass fabric down instead of DeviceInformation
+        # 2. Fabric-aware execution
         self.fabric_execute(fabric)
 
     def fabric_execute(self, fabric: L.Fabric):
@@ -257,11 +263,12 @@ class Learner(Task, EasyLogger):
         # Initialize the scorer and trainer
         self.logger.info("model initialization")
         
-        
-        self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
+        with fabric.init_module():#empty_init=True):
+            self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
 
-        # Initialize the context and the listeners
-        self.trainer.initialize(self.random.state, self.context)
+            # Initialize the context and the listeners
+            self.trainer.initialize(self.random.state, self.context)
+
         for listener in self.listeners:
             listener.initialize(self, self.context)
 
@@ -279,10 +286,15 @@ class Learner(Task, EasyLogger):
         #wrap model and optimizers
         self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
         
-        self.model = fabric.strategy.precision.convert_module(self.model)
-        self.model.to(dtype=precision_to_dtype[fabric._precision.precision])
-        
-        self.logger.info("Moved model to device %s", self.model.device)
+        self.logger.info(f"Model is on device {self.model.device} using dtype {next(self.model.parameters()).dtype}")
+
+        if torch.cuda.is_available():
+            # This is the definitive check for BF16 support
+            supports_bf16 = torch.cuda.is_bf16_supported()
+            self.logger.info(f"Hardware supports BF16: {supports_bf16}")
+            
+            if not supports_bf16 and "bf16" in fabric.precision.precision:
+                self.logger.error("CRITICAL: You are forcing BF16 on incompatible hardware!")
 
         for hook in self.context.hooks(InitializationHook):
             hook.after(self.context)
@@ -327,70 +339,6 @@ class Learner(Task, EasyLogger):
                         "all listeners asked for it"
                     )
                     break
-
-                # Hard-coded global early stopping (inspired by TrainerValidationLoss)
-                # If every listener exposes a `top` dict with an `epoch` field and
-                # none of them improved during the last `early_stop_epochs` epochs,
-                # stop training.
-                if getattr(self, "early_stop_epochs", 0) > 0:
-                    stalled_flags = []
-                    for listener in self.listeners:
-                        if self.target_listerner_early_stopping and listener.id != self.target_listerner_early_stopping:
-                            continue
-                        top = getattr(listener, "top", None)
-                        # listener.metrics is expected to be a dict like {'RR@10': True, 'AP': False}
-                        listener_metrics = getattr(listener, "metrics", None)
-
-                        # If there is no top info, we cannot consider this listener stalled.
-                        if not top:
-                            stalled_flags.append(False)
-                            continue
-
-                        # If no per-metric tracking info is provided, maybe we could just skip the early_stop check
-                        if not listener_metrics:
-                            # try:
-                            #     last_impr = int(top.get("epoch", state.epoch))
-                            # except Exception:
-                            #     stalled_flags.append(False)
-                            #     continue
-
-                            # epochs_since_imp = state.epoch - last_impr
-                            # stalled_flags.append(epochs_since_imp >= self.early_stop_epochs)
-                            continue
-
-                        # Collect last improvement epochs only for metrics that the listener tracks
-                        tracked_epochs: List[int] = []
-                        for metric_name, track in listener_metrics.items():
-                            if not track:
-                                continue
-                            if metric_name in top:
-                                entry = top[metric_name]
-                                try:
-                                    if isinstance(entry, dict) and "epoch" in entry:
-                                        tracked_epochs.append(int(entry["epoch"]))
-                                    else:
-                                        # entry might be a scalar epoch or value; try to coerce
-                                        tracked_epochs.append(int(entry))
-                                except Exception:
-                                    # ignore this metric if its format is unexpected
-                                    continue
-
-                        # If none of the tracked metrics have recorded epochs, assume not stalled
-                        if not tracked_epochs:
-                            stalled_flags.append(False)
-                            continue
-
-                        last_impr = max(tracked_epochs)
-                        epochs_since_imp = state.epoch - last_impr
-                        stalled_flags.append(epochs_since_imp >= self.early_stop_epochs)
-
-                    if all(stalled_flags):
-                        self.logger.warning(
-                            "stopping after epoch %s (hard stop=%s) - all listeners stalled",
-                            state.epoch,
-                            self.early_stop_epochs,
-                        )
-                        break
 
                 # Stop if max epoch is reached
                 if self.context.epoch >= self.max_epochs:
