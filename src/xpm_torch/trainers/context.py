@@ -308,6 +308,12 @@ class TrainerContext(Context):
             loss.backward()
 
     def add_metric(self, metric: Metric):
+        """
+        add a metric to be reported at the end of the step (e.g., for logging in tensorboard)
+        
+        :param metric: The metric to be added
+        :type metric: Metric
+        """
         assert self.metrics is not None, "Not within an optimization step"
         if self._scope:
             metric.key = "/".join(s for s in self._scope if s) + "/" + metric.key
