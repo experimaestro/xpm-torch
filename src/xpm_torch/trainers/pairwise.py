@@ -1,24 +1,17 @@
-from dataclasses import InitVar
 import sys
-from typing import Any
 import torch
 from torch.functional import Tensor
 from experimaestro import Param
 from xpm_torch.losses.pairwise import PairwiseLoss
 from xpm_torch.metrics import ScalarMetric
 from xpmir.letor.records import (
-    PairwiseRecord,
     PairwiseRecords,
 )
 from xpmir.utils.utils import foreach
-from xpmir.utils.iter import MultiprocessSerializableIterator
 import numpy as np
-from xpmir.letor.records import (
-    PairwiseRecord,
-    PairwiseRecords,
-)
-from xpmir.letor.samplers import PairwiseSampler, SerializableIterator
+from xpmir.letor.samplers import PairwiseSampler
 from xpm_torch.trainers import TrainerContext, LossTrainer
+from xpm_torch.collate import pairwise_collate
 
 
 class PairwiseTrainer(LossTrainer):
@@ -30,8 +23,6 @@ class PairwiseTrainer(LossTrainer):
     sampler: Param[PairwiseSampler]
     """The pairwise sampler"""
 
-    sampler_iter: InitVar[SerializableIterator[PairwiseRecord, Any]]
-
     def initialize(
         self,
         random: np.random.RandomState,
@@ -41,9 +32,10 @@ class PairwiseTrainer(LossTrainer):
         self.lossfn.initialize(self.ranker)
         foreach(context.hooks(PairwiseLoss), lambda loss: loss.initialize(self.ranker))
         self.sampler.initialize(random)
-        self.sampler_iter = MultiprocessSerializableIterator(
-            self.sampler.pairwise_batch_iter(self.batch_size)
-        )
+
+        dataset = self.sampler.as_dataset()
+        collate_fn = self.sampler.get_collate_fn(pairwise_collate)
+        self._create_dataloader(dataset, collate_fn)
 
     def train_batch(self, records: PairwiseRecords):
         # Get the next batch and compute the scores for each query/document
@@ -68,4 +60,3 @@ class PairwiseTrainer(LossTrainer):
             return (
                 scores_by_record[:, 0] > scores_by_record[:, 1]
             ).sum().float() / len(scores_by_record)
-        

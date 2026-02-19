@@ -4,9 +4,9 @@ import numpy as np
 from functools import cached_property
 from experimaestro import Config, Param
 from xpm_torch.utils.logging import EasyLogger
-from xpm_torch.utils.iter import SerializableIterator, BatchIteratorAdapter
 
 T = TypeVar("T")
+
 
 class Random(Config):
     """Random configuration"""
@@ -28,6 +28,10 @@ class Sampler(Config, EasyLogger):
     def initialize(self, random: Optional[np.random.RandomState]):
         self.random = random or np.random.RandomState(random.randint(0, 2**31))
 
+    def get_collate_fn(self, base_collate):
+        """Returns a collate function. Subclasses can override to wrap with
+        hydration or other transforms. Default returns base_collate unchanged."""
+        return base_collate
 
 
 class SampleIterator(Config, Iterable[T], ABC):
@@ -51,14 +55,3 @@ class SampleIterator(Config, Iterable[T], ABC):
 
         if data:
             yield data
-
-
-class BaseSampler(Sampler, SampleIterator[T], ABC):
-    """A serializable sampler iterator"""
-
-    @abstractmethod
-    def __iter__() -> SerializableIterator[T]:
-        pass
-
-    def __batch_iter__(self, batch_size: int) -> BatchIteratorAdapter:
-        return BatchIteratorAdapter(self.__iter__(), batch_size)

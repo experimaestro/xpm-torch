@@ -12,7 +12,6 @@ from experimaestro import (
     Annotated,
     tqdm,
     Meta,
-    field,
 )
 
 import lightning as L
@@ -20,7 +19,6 @@ from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
 from xpm_torch import Random, ModuleInitMode
 from xpm_torch.metrics import Metrics
-from .batchers import RecoverableOOMError
 from .optim import (
     Module,
     ModuleLoader,
@@ -30,7 +28,6 @@ from .optim import (
 )
 from xpm_torch.context import Hook, InitializationHook
 from xpm_torch.utils.logging import EasyLogger
-from xpm_torch.configuration import FabricConfiguration
 
 from xpm_torch.trainers.context import (
     StepTrainingHook,
@@ -42,8 +39,10 @@ from xpm_torch.trainers import Trainer
 
 logger = logging.getLogger(__name__)
 
+
 class Strategy(Config, l_Strategy):
     """A Lightning strategy"""
+
     pass
 
 
@@ -54,6 +53,7 @@ class LearnerListenerStatus(Enum):
 
     def update(self, other: "LearnerListenerStatus") -> "LearnerListenerStatus":
         return LearnerListenerStatus(max(self.value, other.value))
+
 
 class CheckpointModuleLoader(ModuleLoader):
     """Useful to load a specific checkpoint"""
@@ -94,7 +94,7 @@ class LearnerListener(Config):
 class LearnerOutput(NamedTuple):
     """The data structure for the output of a learner. It contains a dictionary
     where the key is the name of the listener and the value is the output of
-    that listener. It also allows to access the checkpoints saved during 
+    that listener. It also allows to access the checkpoints saved during
     the training"""
 
     listeners: Dict[str, Any]
@@ -154,31 +154,31 @@ class Learner(Task, EasyLogger):
     :class:`Initialization hooks <xpm_torch.context.InitializationHook>` are called
     before and after the initialization of the trainer and listeners.
     """
-    
-    #TODO Use Fabric Config instead -> changes the id...
+
+    # TODO Use Fabric Config instead -> changes the id...
     # Fabric Parameters
-    accelerator: Param[str] = "auto" 
+    accelerator: Param[str] = "auto"
     """e.g., 'gpu', 'cpu', 'tpu'"""
 
     devices: Param[Union[int, str]] = "auto"
     """Number of devices to use, see Lightning documentation"""
 
-    strategy: Param[str] = "auto" # e.g., 'ddp', 'fsdp'
+    strategy: Param[str] = "auto"  # e.g., 'ddp', 'fsdp'
     """Strategy to use for distributed training, see Lightning documentation"""
 
-    #TODO - auto set it based on the precision ?
+    # TODO - auto set it based on the precision ?
     torch_fp32_precision: Param[str] = "high"
     """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision"""
 
-    precision: Param[str] = "32-true" 
+    precision: Param[str] = "32-true"
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation"""
 
     # Hard-coded global early stopping threshold (in epochs)
     early_stop_epochs: Meta[int] = 100
-    """If all listeners have not improved for this many epochs, stop training.""" 
+    """If all listeners have not improved for this many epochs, stop training."""
 
     target_listerner_early_stopping: Meta[Optional[str]] = "aggregated_validation"
-    """If set, only consider this listener for early stopping"""  
+    """If set, only consider this listener for early stopping"""
 
     def __validate__(self):
         assert self.optimizers, "At least one optimizer should be defined"
@@ -200,7 +200,19 @@ class Learner(Task, EasyLogger):
                     path=self.last_checkpoint_path / TrainState.MODEL_PATH,
                 )
             ),
-            checkpoints={interval: dep(CheckpointModuleLoader.C(value=self.model, path=TrainerContext.get_checkpoint_path(self.checkpointspath, interval) / TrainState.MODEL_PATH, epoch=interval)) for interval in range(0, self.max_epochs, self.checkpoint_interval)} ,
+            checkpoints={
+                interval: dep(
+                    CheckpointModuleLoader.C(
+                        value=self.model,
+                        path=TrainerContext.get_checkpoint_path(
+                            self.checkpointspath, interval
+                        )
+                        / TrainState.MODEL_PATH,
+                        epoch=interval,
+                    )
+                )
+                for interval in range(0, self.max_epochs, self.checkpoint_interval)
+            },
         )
 
     @property
@@ -208,7 +220,9 @@ class Learner(Task, EasyLogger):
         return self.checkpointspath / "last"
 
     def execute(self):
-        self.logger.info(f"Setting fp32 matmul precision to {self.torch_fp32_precision}")
+        self.logger.info(
+            f"Setting fp32 matmul precision to {self.torch_fp32_precision}"
+        )
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
         # 1. Launch Fabric
@@ -216,10 +230,10 @@ class Learner(Task, EasyLogger):
             accelerator=self.accelerator,
             devices=self.devices,
             strategy=self.strategy,
-            precision=self.precision
+            precision=self.precision,
         )
         fabric.launch()
-        
+
         # 2. Fabric-aware execution
         self.fabric_execute(fabric)
 
@@ -251,7 +265,7 @@ class Learner(Task, EasyLogger):
 
         # Sets the random seed
         # WARNING - will still not be fully deterministic unless using (lot slower):
-        # - torch.use_deterministic_algorithms(True) (PyTorch ≥1.8). 
+        # - torch.use_deterministic_algorithms(True) (PyTorch ≥1.8).
         # - torch.backends.cudnn.deterministic = True
         # - torch.backends.cudnn.benchmark = False.
         # can also use fabric.seed_everything(self.random.state.randint((2**32) - 1))
@@ -262,12 +276,16 @@ class Learner(Task, EasyLogger):
 
         # Initialize the scorer and trainer
         self.logger.info("model initialization")
-        
-        with fabric.init_module():#empty_init=True):
+
+        with fabric.init_module():  # empty_init=True):
             self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
 
             # Initialize the context and the listeners
             self.trainer.initialize(self.random.state, self.context)
+
+        # Wrap dataloader with Fabric for device placement (if using new path)
+        if hasattr(self.trainer, "dataloader") and self.trainer.dataloader is not None:
+            self.trainer.dataloader = fabric.setup_dataloaders(self.trainer.dataloader)
 
         for listener in self.listeners:
             listener.initialize(self, self.context)
@@ -282,19 +300,25 @@ class Learner(Task, EasyLogger):
             hooks=[hook for hook in self.hooks if isinstance(hook, OptimizationHook)],
             trainer_context=self.context,
         )
-        
-        #wrap model and optimizers
-        self.model, *self.optimizer.optimizers = fabric.setup(self.model, *self.optimizer.optimizers)
-        
-        self.logger.info(f"Model is on device {self.model.device} using dtype {next(self.model.parameters()).dtype}")
+
+        # wrap model and optimizers
+        self.model, *self.optimizer.optimizers = fabric.setup(
+            self.model, *self.optimizer.optimizers
+        )
+
+        self.logger.info(
+            f"Model is on device {self.model.device} using dtype {next(self.model.parameters()).dtype}"
+        )
 
         if torch.cuda.is_available():
             # This is the definitive check for BF16 support
             supports_bf16 = torch.cuda.is_bf16_supported()
             self.logger.info(f"Hardware supports BF16: {supports_bf16}")
-            
+
             if not supports_bf16 and "bf16" in fabric.precision.precision:
-                self.logger.error("CRITICAL: You are forcing BF16 on incompatible hardware!")
+                self.logger.error(
+                    "CRITICAL: You are forcing BF16 on incompatible hardware!"
+                )
 
         for hook in self.context.hooks(InitializationHook):
             hook.after(self.context)
@@ -365,7 +389,7 @@ class Learner(Task, EasyLogger):
             yield self.context.state
 
         # Get an iterator over batches
-        iter = self.trainer.iter_batches()
+        batch_iter = self.trainer.iter_batches()
 
         while True:
             # Step to the next epoch
@@ -384,15 +408,19 @@ class Learner(Task, EasyLogger):
                 # Epoch: loop over batches
                 metrics = Metrics()
                 for b in range(self.steps_per_epoch):
-                    # Get the next batch
-                    batch = next(iter)
+                    # Get the next batch, recreate iterator on exhaustion
+                    try:
+                        batch = next(batch_iter)
+                    except StopIteration:
+                        batch_iter = self.trainer.iter_batches()
+                        batch = next(batch_iter)
+
                     self.context.nextbatch()
 
                     while True:
                         try:
                             # Computes the gradient, takes a step and collect metrics
                             with self.context.step(metrics):
-                                
                                 # Call epoch hooks
                                 for hook in self.context.hooks(StepTrainingHook):
                                     hook.before(self.context)

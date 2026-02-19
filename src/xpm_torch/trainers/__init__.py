@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from datamaestro.record import Record, Item, record_type
+from datamaestro.record import Record
 
 
 from xpm_torch import Module, Sampler
@@ -16,7 +16,7 @@ from xpm_torch.trainers.context import (
     TrainingHook,
     TrainerContext,
 )
-from xpm_torch.utils.iter import SerializableIterator
+from torchdata.stateful_dataloader import StatefulDataLoader
 
 
 class Trainer(Config, EasyLogger):
@@ -50,11 +50,12 @@ class Trainer(Config, EasyLogger):
 
         self.context = context
 
-        for hook in self.hooks: self.context.add_hooks(hook)
+        for hook in self.hooks:
+            self.context.add_hooks(hook)
 
     def to(self, device):
         """Change the computing device (if this is needed)"""
-        
+
         for hook in self.context.hooks(nn.Module):
             hook.to(device)
 
@@ -69,20 +70,16 @@ class Trainer(Config, EasyLogger):
         ...
 
     @abstractmethod
-    def load_state_dict(self, state: Dict):
-        ...
+    def load_state_dict(self, state: Dict): ...
 
     @abstractmethod
-    def state_dict(self):
-        ...
+    def state_dict(self): ...
 
 
 class LossTrainer(Trainer):
     """Trainer based on a loss function
 
-    This trainer supposes that:
-
-    - the `sampler_iter` is initialized – and is a serializable iterator over batches
+    Uses StatefulDataLoader + IterableDataset for data loading.
     """
 
     batcher: Param[Batcher] = field(default_factory=Batcher.C)
@@ -94,8 +91,11 @@ class LossTrainer(Trainer):
     batch_size: Param[int] = 16
     """Number of samples per batch"""
 
-    sampler_iter: SerializableIterator
-    """The iterator over batches"""
+    num_workers: Param[int] = 2
+    """Number of DataLoader workers"""
+
+    dataloader: Optional[StatefulDataLoader] = None
+    """StatefulDataLoader for training data"""
 
     def initialize(
         self,
@@ -108,15 +108,29 @@ class LossTrainer(Trainer):
 
         self.batcher_worker = self.batcher.initialize(self.batch_size)
 
-    def iter_batches(self) -> SerializableIterator:
-        """Returns the batchwise iterator"""
-        return self.sampler_iter
+    def _create_dataloader(self, dataset, collate_fn):
+        """Create a StatefulDataLoader from a dataset and collate function."""
+        self.dataloader = StatefulDataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_fn,
+            num_workers=self.num_workers,
+        )
+
+    def iter_batches(self) -> Iterator:
+        """Returns an iterator over batches."""
+        assert self.dataloader is not None, (
+            "dataloader not initialized — call _create_dataloader() first"
+        )
+        return iter(self.dataloader)
 
     def load_state_dict(self, state: Dict):
-        self.sampler_iter.load_state_dict(state["sampler"])
+        if "dataloader" in state and self.dataloader is not None:
+            self.dataloader.load_state_dict(state["dataloader"])
 
     def state_dict(self):
-        return {"sampler": self.sampler_iter.state_dict()}
+        assert self.dataloader is not None, "dataloader not initialized"
+        return {"dataloader": self.dataloader.state_dict()}
 
     def process_batch(self, batch: Record):
         """Compute loss for a given batch of records - called by the learner.
@@ -151,9 +165,7 @@ class LossTrainer(Trainer):
                 self.context.add_metric(
                     ScalarMetric("+".join(names), float(total_loss.item()), nrecords)
                 )
-            self.context.backward(
-                self.context.state.optimizer.scale(total_loss)
-            )
+            self.context.backward(self.context.state.optimizer.scale(total_loss))
 
     def train_batch(self, records):
         """This method should report"""

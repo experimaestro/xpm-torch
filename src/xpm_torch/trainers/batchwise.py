@@ -1,11 +1,11 @@
 import sys
-from typing import Iterator
 import torch
 from experimaestro import Param, initializer
 from xpm_torch.losses.batchwise import BatchwiseLoss
 from xpmir.letor.samplers import BatchwiseSampler, BatchwiseRecords
 from xpm_torch.trainers import TrainerContext, LossTrainer
 import numpy as np
+
 
 class BatchwiseTrainer(LossTrainer):
     """Batchwise trainer
@@ -30,10 +30,12 @@ class BatchwiseTrainer(LossTrainer):
     ):
         super().initialize(random, context)
         self.lossfn.initialize(context)
-        self.sampler_iter = self.sampler.batchwise_iter(self.batch_size)
 
-    def iter_batches(self) -> Iterator[BatchwiseRecords]:
-        return self.sampler_iter
+        from xpm_torch.collate import batchwise_collate
+
+        dataset = self.sampler.as_dataset()
+        collate_fn = self.sampler.get_collate_fn(batchwise_collate)
+        self._create_dataloader(dataset, collate_fn)
 
     def train_batch(self, batch: BatchwiseRecords):
         # Get the next batch and compute the scores for each query/document
