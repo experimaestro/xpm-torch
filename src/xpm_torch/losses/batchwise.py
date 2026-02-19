@@ -43,7 +43,7 @@ class CrossEntropyLoss(BatchwiseLoss):
 
 
 class SoftmaxCrossEntropy(BatchwiseLoss):
-    NAME = "ce"
+    NAME = "infonce"
 
     """Computes the probability of relevant documents for a given query"""
 
