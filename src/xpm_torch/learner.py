@@ -1,5 +1,5 @@
 from enum import Enum
-import logging
+from time import perf_counter
 import torch
 import numpy as np
 from pathlib import Path
@@ -18,7 +18,8 @@ import lightning as L
 from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
 from xpm_torch import Random, ModuleInitMode
-from xpm_torch.metrics import Metrics
+from xpm_torch.metrics import Metrics, ScalarMetric
+from .batchers import RecoverableOOMError
 from .optim import (
     Module,
     ModuleLoader,
@@ -37,6 +38,7 @@ from xpm_torch.trainers.context import (
 from xpm_torch.batchers import RecoverableOOMError
 from xpm_torch.trainers import Trainer
 
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -220,9 +222,12 @@ class Learner(Task, EasyLogger):
         return self.checkpointspath / "last"
 
     def execute(self):
-        self.logger.info(
-            f"Setting fp32 matmul precision to {self.torch_fp32_precision}"
-        )
+        """ Main Training loop, executed using the fabric context.
+        the training process is stopped either by 
+         - the listeners 
+         - max_epoch reached
+        """
+        self.logger.info(f"Setting fp32 matmul precision to {self.torch_fp32_precision}")
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
         # 1. Launch Fabric
@@ -234,17 +239,10 @@ class Learner(Task, EasyLogger):
         )
         fabric.launch()
 
-        # 2. Fabric-aware execution
-        self.fabric_execute(fabric)
-
-    def fabric_execute(self, fabric: L.Fabric):
-        logger = logging.getLogger()
-        logger.setLevel(logging.INFO)
-        for handler in logger.handlers:
-            handler.setLevel(logging.INFO)
-
         self.optimizer = ScheduledOptimizer()
+
         self.only_cached = False
+        
         self.context = TrainerContext(
             self.logpath,
             self.checkpointspath,
@@ -382,7 +380,8 @@ class Learner(Task, EasyLogger):
                 self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
 
     def iter_train(self, fabric: L.Fabric) -> Iterator[TrainState]:
-        """Train iteration"""
+        """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps
+        """
         # Try to load a checkpoint
 
         if self.context.load_bestcheckpoint(self.max_epochs):
@@ -407,6 +406,7 @@ class Learner(Task, EasyLogger):
 
                 # Epoch: loop over batches
                 metrics = Metrics()
+                start = perf_counter()
                 for b in range(self.steps_per_epoch):
                     # Get the next batch, recreate iterator on exhaustion
                     try:
@@ -440,11 +440,16 @@ class Learner(Task, EasyLogger):
 
                     for hook in self.context.hooks(StepTrainingHook):
                         hook.after(self.context)
-
-                # Yields the current state (after one epoch)
+                
+                metrics.add(
+                    ScalarMetric("iter_per_seconds", self.steps_per_epoch / (perf_counter() - start), 1)
+                )
+                # Yields the current state (after one epoch) 
+                # -> allows listeners to process it and decide whether to stop or not
                 yield self.context.state
 
-                # Report metrics over the epoch
+                # Report metrics over the epoch, and log them in tensorboard
+                # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
                 metrics.report(
                     self.context.state.step,
                     self.context.writer,
