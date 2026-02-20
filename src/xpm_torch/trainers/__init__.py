@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from datamaestro.record import Record
 from lightning.fabric.wrappers import _FabricDataLoader
 
 
@@ -139,13 +138,13 @@ class LossTrainer(Trainer):
             
         return {"dataloader": dataloader_state}
 
-    def process_batch(self, batch: Record):
+    def process_batch(self, batch: list):
         """Compute loss for a given batch of records - called by the learner.
         important: this method uses the batcher to split the batch into microbatches when needed
         """
         self.batcher_worker.process(batch, self.process_microbatch, raise_oom=True)
 
-    def process_microbatch(self, records: Record):
+    def process_microbatch(self, records: list):
         """Combines a forward and backard
 
         This method can be implemented by specific trainers that use the gradient.
