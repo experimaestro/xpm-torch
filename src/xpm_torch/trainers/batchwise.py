@@ -35,8 +35,7 @@ class BatchwiseTrainer(LossTrainer):
         from xpm_torch.collate import batchwise_collate
 
         dataset = self.sampler.as_dataset()
-        collate_fn = self.sampler.get_collate_fn(batchwise_collate)
-        self._create_dataloader(dataset, collate_fn)
+        self._create_dataloader(dataset, batchwise_collate)
 
     def train_batch(self, batch: BatchwiseRecords):
         # Get the next batch and compute the scores for each query/document

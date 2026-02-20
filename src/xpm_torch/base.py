@@ -28,11 +28,6 @@ class Sampler(Config, EasyLogger):
     def initialize(self, random: Optional[np.random.RandomState]):
         self.random = random or np.random.RandomState(random.randint(0, 2**31))
 
-    def get_collate_fn(self, base_collate):
-        """Returns a collate function. Subclasses can override to wrap with
-        hydration or other transforms. Default returns base_collate unchanged."""
-        return base_collate
-
 
 class SampleIterator(Config, Iterable[T], ABC):
     """Generic class to iterate over items or batch of items"""

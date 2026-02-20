@@ -34,8 +34,7 @@ class PairwiseTrainer(LossTrainer):
         self.sampler.initialize(random)
 
         dataset = self.sampler.as_dataset()
-        collate_fn = self.sampler.get_collate_fn(pairwise_collate)
-        self._create_dataloader(dataset, collate_fn)
+        self._create_dataloader(dataset, pairwise_collate)
 
     def train_batch(self, records: PairwiseRecords):
         # Get the next batch and compute the scores for each query/document
