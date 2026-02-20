@@ -2,7 +2,8 @@ import sys
 import torch
 from experimaestro import Param, initializer
 from xpm_torch.losses.batchwise import BatchwiseLoss
-from xpmir.letor.samplers import BatchwiseSampler, BatchwiseRecords
+from xpmir.letor.samplers import BatchwiseSampler
+from xpmir.letor.records import BatchwiseRecords
 from xpm_torch.trainers import TrainerContext, LossTrainer
 import numpy as np
 
