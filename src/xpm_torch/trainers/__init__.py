@@ -6,6 +6,7 @@ import torch.nn as nn
 import numpy as np
 
 from datamaestro.record import Record
+from lightning.fabric.wrappers import _FabricDataLoader
 
 
 from xpm_torch import Module, Sampler
@@ -130,7 +131,13 @@ class LossTrainer(Trainer):
 
     def state_dict(self):
         assert self.dataloader is not None, "dataloader not initialized"
-        return {"dataloader": self.dataloader.state_dict()}
+        if isinstance(self.dataloader, _FabricDataLoader):
+            # If the dataloader is wrapped with Fabric, we need to get the state dict from the original dataloader
+            dataloader_state = self.dataloader._dataloader.state_dict()
+        else:
+            dataloader_state = self.dataloader.state_dict()
+            
+        return {"dataloader": dataloader_state}
 
     def process_batch(self, batch: Record):
         """Compute loss for a given batch of records - called by the learner.

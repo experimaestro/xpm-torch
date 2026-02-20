@@ -325,8 +325,6 @@ class Learner(Task, EasyLogger):
 
         self.logger.info("Starting to train")
 
-        self.logger.info("Model moved to device %s", self.model.device)
-
         current = 0
         state = None
 
