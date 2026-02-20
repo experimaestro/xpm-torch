@@ -17,9 +17,6 @@ class BatchwiseTrainer(LossTrainer):
     sampler: A batchwise sampler
     """
 
-    sampler: Param[BatchwiseSampler]
-    """A batch-wise sampler"""
-
     lossfn: Param[BatchwiseLoss]
     """A batchwise loss function"""
 

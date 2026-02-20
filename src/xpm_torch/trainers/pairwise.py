@@ -20,9 +20,6 @@ class PairwiseTrainer(LossTrainer):
     lossfn: Param[PairwiseLoss]
     """The loss function"""
 
-    sampler: Param[PairwiseSampler]
-    """The pairwise sampler"""
-
     def initialize(
         self,
         random: np.random.RandomState,
