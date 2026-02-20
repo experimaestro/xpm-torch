@@ -288,6 +288,8 @@ class Learner(Task, EasyLogger):
         for listener in self.listeners:
             listener.initialize(self, self.context)
 
+        
+
         num_training_steps = self.max_epochs * self.steps_per_epoch
 
         self.optimizer.initialize(
@@ -322,6 +324,8 @@ class Learner(Task, EasyLogger):
             hook.after(self.context)
 
         self.logger.info("Starting to train")
+
+        self.logger.info("Model moved to device %s", self.model.device)
 
         current = 0
         state = None

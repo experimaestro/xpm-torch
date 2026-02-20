@@ -8,7 +8,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 @lru_cache
 def prepare_hf_model(model_id: str) -> bool:
     """Check if model and tokenizer are in cache, if not, download all necessary files.
