@@ -126,7 +126,11 @@ class LossTrainer(Trainer):
 
     def load_state_dict(self, state: Dict):
         if "dataloader" in state and self.dataloader is not None:
-            self.dataloader.load_state_dict(state["dataloader"])
+            if isinstance(self.dataloader, _FabricDataLoader):
+                # If the dataloader is wrapped with Fabric, we need to load the state dict into the original dataloader
+                self.dataloader._dataloader.load_state_dict(state["dataloader"])
+            else:
+                self.dataloader.load_state_dict(state["dataloader"])
 
     def state_dict(self):
         assert self.dataloader is not None, "dataloader not initialized"
