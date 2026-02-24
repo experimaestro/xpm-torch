@@ -1,9 +1,9 @@
 import logging
-from typing import Callable, ParamSpec
+from typing import Callable, Optional, ParamSpec
 from experimaestro import Config, Param, Meta
 import lightning.fabric.strategies as strategies
 import lightning as L
-
+import torch
 logger = logging.getLogger("xpm_torch.configuration")
 
 P = ParamSpec("P")
@@ -36,8 +36,33 @@ class FabricConfiguration(Config):
     see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
     """
 
-    def get_instance(self, **kwargs):
-        """instanciate the Fabric object"""
+    torch_fp32_precision: Param[Optional[str]] = None
+    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Automatically set depending on fabric_config.precision if not set, but can be overridden if needed (e.g., to force TF32 on Ampere GPUs while using bf16 precision for other operations)
+    """
+    
+    is_built = False
+
+
+    def get_Fabric(self, **kwargs):
+        """Builds the Fabric object and set the torch.float32 matmul precision based on the configuration. 
+        This is called by the Learner before launching the training loop
+        """
+        if self.is_built:
+            logger.warning("FabricConfiguration.get_Fabric called multiple times.")
+            return None 
+        
+        self.is_built = True
+        if self.torch_fp32_precision is None:
+            #auto set torch.float32 precision based on fabric precision (if not set explicitly)
+            if self.precision in ["16-mixed", "bf16-mixed"]:
+                self.torch_fp32_precision = "medium"
+            else:
+                self.torch_fp32_precision = "high"
+            logger.info(f"Setting torch.fp32 matmul precision to {self.torch_fp32_precision} based on fabric precision {self.precision}")
+        
+        torch.set_float32_matmul_precision(self.torch_fp32_precision)
+
         return L.Fabric(
             accelerator=self.accelerator,
             devices=self.devices,

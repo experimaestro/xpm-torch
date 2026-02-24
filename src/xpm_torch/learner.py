@@ -11,6 +11,7 @@ from experimaestro import (
     pathgenerator,
     Annotated,
     tqdm,
+    field,
     Meta,
 )
 
@@ -18,6 +19,7 @@ import lightning as L
 from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
 from xpm_torch import Random, ModuleInitMode
+from xpm_torch.configuration import FabricConfiguration
 from xpm_torch.metrics import Metrics, ScalarMetric
 from .batchers import RecoverableOOMError
 from .optim import (
@@ -156,31 +158,17 @@ class Learner(Task, EasyLogger):
     :class:`Initialization hooks <xpm_torch.context.InitializationHook>` are called
     before and after the initialization of the trainer and listeners.
     """
+    
+    fabric_config: Param[FabricConfiguration] = field(
+        default_factory=FabricConfiguration.C
+    )
+    """Runtime configuration, managed by Fabric"""
+    
+    torch_fp32_precision: Param[Optional[str]] = None
+    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Automatically set depending on fabric_config.precision if not set, but can be overridden if needed (e.g., to force TF32 on Ampere GPUs while using bf16 precision for other operations)
+    """
 
-    # TODO Use Fabric Config instead -> changes the id...
-    # Fabric Parameters
-    accelerator: Param[str] = "auto"
-    """e.g., 'gpu', 'cpu', 'tpu'"""
-
-    devices: Param[Union[int, str]] = "auto"
-    """Number of devices to use, see Lightning documentation"""
-
-    strategy: Param[str] = "auto"  # e.g., 'ddp', 'fsdp'
-    """Strategy to use for distributed training, see Lightning documentation"""
-
-    # TODO - auto set it based on the precision ?
-    torch_fp32_precision: Param[str] = "high"
-    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision"""
-
-    precision: Param[str] = "32-true"
-    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': see Lightning documentation"""
-
-    # Hard-coded global early stopping threshold (in epochs)
-    early_stop_epochs: Meta[int] = 100
-    """If all listeners have not improved for this many epochs, stop training."""
-
-    target_listerner_early_stopping: Meta[Optional[str]] = "aggregated_validation"
-    """If set, only consider this listener for early stopping"""
 
     def __validate__(self):
         assert self.optimizers, "At least one optimizer should be defined"
@@ -226,17 +214,10 @@ class Learner(Task, EasyLogger):
         the training process is stopped either by 
          - the listeners 
          - max_epoch reached
-        """
-        self.logger.info(f"Setting fp32 matmul precision to {self.torch_fp32_precision}")
-        torch.set_float32_matmul_precision(self.torch_fp32_precision)
+        """        
 
         # 1. Launch Fabric
-        fabric = L.Fabric(
-            accelerator=self.accelerator,
-            devices=self.devices,
-            strategy=self.strategy,
-            precision=self.precision,
-        )
+        fabric = self.fabric_config.get_Fabric()
         fabric.launch()
 
         self.optimizer = ScheduledOptimizer()
