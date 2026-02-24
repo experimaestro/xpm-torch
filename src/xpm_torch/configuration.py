@@ -19,7 +19,18 @@ class FabricConfiguration(Config):
     The backend is fabric, so the complete documentation can be found on
     https://lightning.ai/docs/fabric/stable/api/fabric_args.html
     """
+    #parameters - change Learner output
+    precision: Param[str] = "32-true"
+    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': 
+    see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
+    """
 
+    torch_fp32_precision: Param[Optional[str]]
+    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Automatically set depending on fabric_config.precision if not set, but can be overridden if needed (e.g., to force TF32 on Ampere GPUs while using bf16 precision for other operations)
+    """
+    
+    # Meta - parameters - don't change output, just computing environment
     num_nodes: Meta[int] = 1
     """Number of nodes"""
 
@@ -30,19 +41,8 @@ class FabricConfiguration(Config):
 
     accelerator: Meta[str] = "auto"
     """The accelerator to use"""
-
-    precision: Param[str] = "32-true"
-    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': 
-    see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
-    """
-
-    torch_fp32_precision: Param[Optional[str]] = None
-    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
-    Automatically set depending on fabric_config.precision if not set, but can be overridden if needed (e.g., to force TF32 on Ampere GPUs while using bf16 precision for other operations)
-    """
     
     is_built = False
-
 
     def get_Fabric(self, **kwargs):
         """Builds the Fabric object and set the torch.float32 matmul precision based on the configuration. 

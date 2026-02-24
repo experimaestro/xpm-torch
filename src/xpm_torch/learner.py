@@ -160,14 +160,9 @@ class Learner(Task, EasyLogger):
     """
     
     fabric_config: Param[FabricConfiguration] = field(
-        default_factory=FabricConfiguration.C
+        ignore_default=FabricConfiguration.C()
     )
     """Runtime configuration, managed by Fabric"""
-    
-    torch_fp32_precision: Param[Optional[str]] = None
-    """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
-    Automatically set depending on fabric_config.precision if not set, but can be overridden if needed (e.g., to force TF32 on Ampere GPUs while using bf16 precision for other operations)
-    """
 
 
     def __validate__(self):
