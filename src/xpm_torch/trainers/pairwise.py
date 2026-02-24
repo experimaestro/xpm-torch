@@ -2,16 +2,27 @@ import sys
 import torch
 from torch.functional import Tensor
 from experimaestro import Param
+from typing import List
 from xpm_torch.losses.pairwise import PairwiseLoss
 from xpm_torch.metrics import ScalarMetric
-from xpmir.letor.records import (
-    PairwiseRecords,
-)
+from xpm_torch.trainers import TrainerContext, LossTrainer
+
 from xpmir.utils.utils import foreach
 import numpy as np
 from xpmir.letor.samplers import PairwiseSampler
-from xpm_torch.trainers import TrainerContext, LossTrainer
-from xpm_torch.collate import pairwise_collate
+from xpmir.letor.records import (
+    PairwiseRecord,
+    PairwiseRecords,
+    ProductRecords,
+)
+
+
+def pairwise_collate(records: List[PairwiseRecord]) -> PairwiseRecords:
+    """Collate individual PairwiseRecords into a PairwiseRecords batch."""
+    batch = PairwiseRecords()
+    for record in records:
+        batch.add(record)
+    return batch
 
 
 class PairwiseTrainer(LossTrainer):
