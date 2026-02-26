@@ -2,11 +2,13 @@ import sys
 import torch
 import numpy as np
 from typing import List
+from typing_extensions import TypedDict, ReadOnly
 from experimaestro import Param, initializer
 
 from xpm_torch.losses.batchwise import BatchwiseLoss
 from xpm_torch.trainers import TrainerContext, LossTrainer
 
+from xpmir.text import TokenizedTexts
 from xpmir.letor.samplers import BatchwiseSampler
 from xpmir.letor.records import BatchwiseRecords
 from xpmir.letor.records import (
@@ -15,7 +17,11 @@ from xpmir.letor.records import (
     ProductRecords,
 )
 
-def batchwise_collate(records: List[PairwiseRecord]) -> ProductRecords:
+class BatchwiseInputs(TypedDict):
+    records: ReadOnly[ProductRecords]
+    tokenized_records: ReadOnly[TokenizedTexts]
+
+def batchwise_collate(records: List[PairwiseRecord]) -> BatchwiseInputs:
     """Collate PairwiseRecords into a ProductRecords batch with in-batch negatives.
 
     Builds a relevance matrix where the diagonal (positive docs) = 1
@@ -36,7 +42,7 @@ def batchwise_collate(records: List[PairwiseRecord]) -> ProductRecords:
     batch.add_documents(*positives)
     batch.add_documents(*negatives)
     batch.set_relevances(relevances)
-    return batch
+    return BatchwiseInputs(records=batch, tokenized_records=None)
 
 
 
@@ -62,12 +68,29 @@ class BatchwiseTrainer(LossTrainer):
         self.lossfn.initialize(context)
 
         dataset = self.sampler.as_dataset()
-        self._create_dataloader(dataset, batchwise_collate)
 
-    def train_batch(self, batch: BatchwiseRecords):
+        if hasattr(self.ranker, "get_tokenizer_fn"):
+            tokenization_fn = self.ranker.get_tokenizer_fn()
+            def collate_fn_with_tokenization(samples: List[PairwiseRecord]) -> BatchwiseInputs:
+                inputs = batchwise_collate(samples)
+                inputs["tokenized_records"] = tokenization_fn(inputs["records"])
+                return inputs
+            collate_fn = collate_fn_with_tokenization
+        else:
+            collate_fn = batchwise_collate
+
+        self._create_dataloader(dataset, collate_fn=collate_fn)
+
+    def train_batch(self, inputs: BatchwiseInputs):
+        batch = inputs["records"]
+        tokenized_records = inputs.get("tokenized_records")
+
         # Get the next batch and compute the scores for each query/document
         # Get the scores
-        rel_scores = self.ranker(batch, self.context)
+        if tokenized_records is not None:
+            rel_scores = self.ranker(batch, tokenized=tokenized_records, info=self.context)
+        else:
+            rel_scores = self.ranker(batch, self.context)
 
         if torch.isnan(rel_scores).any() or torch.isinf(rel_scores).any():
             self.logger.error("nan or inf relevance score detected. Aborting.")

@@ -102,10 +102,14 @@ class LossTrainer(Trainer):
         random: np.random.RandomState,
         context: TrainerContext,
     ):
+        """Initialize the trainer, create the dataloader and initialize the loss function
+        Args:
+            random: Random state for initialization
+            context: TrainerContext for the training process
+        """
         super().initialize(random, context)
 
         self.sampler.initialize(random)
-
         self.batcher_worker = self.batcher.initialize(self.batch_size)
 
     def _create_dataloader(self, dataset, collate_fn):
