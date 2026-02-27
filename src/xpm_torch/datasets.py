@@ -8,7 +8,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Callable, Iterator, Optional, TypeVar, Any, Dict
 import logging
-
+import types
 import torch.distributed as dist
 from torch.utils.data import IterableDataset, get_worker_info
 
@@ -287,7 +287,9 @@ class IndexedDataset(FileShardedDataset[T]):
 
 
 class TransformDataset(ShardedIterableDataset[T]):
-    """Wraps another ShardedIterableDataset and applies a per-record transform."""
+    """Wraps another ShardedIterableDataset and applies a per-record transform.
+    If transform returns None, skip the item.
+    """
 
     def __init__(
         self,
@@ -300,7 +302,19 @@ class TransformDataset(ShardedIterableDataset[T]):
 
     def iter_shard(self, shard_id: int, num_shards: int) -> Iterator[T]:
         for item in self.inner.iter_shard(shard_id, num_shards):
-            yield self.transform(item)
+            transformed = self.transform(item)
+            
+            if transformed is None:
+                continue
+                
+            # Check if the result is iterable (like your generator) 
+            # but not a single sample object
+            if isinstance(transformed, (list, types.GeneratorType)):
+                for sub_item in transformed:
+                    if sub_item is not None:
+                        yield sub_item
+            else:
+                yield transformed
 
     def state_dict(self) -> Dict[str, Any]:
         return self.inner.state_dict()
