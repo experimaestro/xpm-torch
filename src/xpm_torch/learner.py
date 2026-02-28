@@ -19,7 +19,7 @@ from experimaestro import (
 import lightning as L
 from lightning.fabric.strategies.strategy import Strategy as l_Strategy
 
-from xpm_torch import Random, ModuleInitMode
+from xpm_torch import Random
 from xpm_torch.metrics import Metrics, ScalarMetric
 from .batchers import RecoverableOOMError
 from .optim import (
@@ -263,7 +263,7 @@ class Learner(Task, EasyLogger):
         self.logger.info("model initialization")
         
         with fabric.init_module():#empty_init=True):
-            self.model.initialize(ModuleInitMode.DEFAULT.to_options(self.random.state))
+            self.model.initialize()
 
             # Initialize the context and the listeners
             self.trainer.initialize(self.random.state, self.context)

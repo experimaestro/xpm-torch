@@ -1,5 +1,4 @@
 from lightning import Fabric
-from dataclasses import dataclass
 from enum import Enum
 import threading, logging
 from typing import Any, Callable, List, Optional, TYPE_CHECKING, Union
@@ -120,34 +119,6 @@ class AdamW(Optimizer):
         )
 
 
-class ModuleInitMode(Enum):
-    """Initialization mode"""
-
-    #: Default initialization (i.e. can load default parameters or initialize randomly)
-    DEFAULT = 0
-
-    #: No parameter initialization (just initialize the structure of the model)
-    NONE = 1
-
-    #: Random initialization (initialize the structure, then use a the random
-    #: number generator to initialize the values)
-    RANDOM = 2
-
-    def to_options(self, random: Optional[np.random.RandomState] = None, fabric: Optional[Fabric] = None):
-        return ModuleInitOptions(self, random, fabric=fabric)
-
-
-@dataclass
-class ModuleInitOptions:
-    #: Initialization mode
-    mode: ModuleInitMode
-
-    #: Random generator (only defined when mode is RANDOM)
-    random: Optional[np.random.RandomState] = None
-
-    fabric: Optional[Fabric] = None
-
-
 class Module(Config, Initializable, torch.nn.Module):
     """A module contains parameters"""
 
@@ -156,11 +127,8 @@ class Module(Config, Initializable, torch.nn.Module):
         torch.nn.Module.__init__(self)
 
 
-    def __initialize__(self, options: ModuleInitOptions):
-        """Initialize a module
-
-        :param options: The initialization options
-        """
+    def __initialize__(self):
+        """Initialize a module (structure only, no weight loading)"""
         pass
 
     def __call__(self, *args, **kwargs):
@@ -185,9 +153,9 @@ class ModuleList(Module, Initializable):
         for ix, sub_module in enumerate(self.sub_modules):
             self.add_module(str(ix), sub_module)
 
-    def __initialize__(self, options: ModuleInitOptions):
+    def __initialize__(self):
         for module in self.sub_modules:
-            module.initialize(options)
+            module.initialize()
 
     def __call__(self, *args, **kwargs):
         raise AssertionError("This module cannot be used as such")
@@ -200,7 +168,7 @@ class ModuleLoader(PathSerializationLWTask):
     def execute(self):
         """Loads the model from disk using the given serialization path"""
         logger.info("Loading model from disk: %s", self.path)
-        self.value.initialize(ModuleInitMode.NONE.to_options())
+        self.value.initialize()
         data = torch.load(self.path)
 
         # Check if model has the dummy param; if not, remove it from data

@@ -17,7 +17,7 @@ from experimaestro import (
 from datamaestro_text.data.ir import (
     Adhoc,
 )
-from xpm_torch import Module, Random, ModuleInitMode
+from xpm_torch import Module, Random
 from xpm_torch.metrics import Metrics
 from .batchers import RecoverableOOMError
 from .optim import ModuleLoader

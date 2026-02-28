@@ -5,7 +5,7 @@ import torch.nn as nn
 from typing import Iterator, NamedTuple
 from experimaestro import Param, Config, PathSerializationLWTask
 import torch
-from xpm_torch.optim import Module, ModuleLoader, ModuleInitMode
+from xpm_torch.optim import Module, ModuleLoader
 import logging
 
 logger = logging.getLogger("xpm_torch.learning")
@@ -183,7 +183,7 @@ class PartialModuleLoader(PathSerializationLWTask):
 
     def execute(self):
         """Combine the model in the selectors"""
-        self.value.initialize(ModuleInitMode.NONE.to_options())
+        self.value.initialize()
         data = torch.load(self.path)
         logger.info(
             "(partial module loader) Loading parameters from %s into %s",
