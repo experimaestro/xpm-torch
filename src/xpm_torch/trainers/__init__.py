@@ -50,7 +50,7 @@ class Trainer(Config, EasyLogger):
 
         self.context = context
 
-        for hook in self.hooks: self.context.add_hooks(hook)
+        for hook in self.hooks: self.context.add_hook(hook)
 
     def to(self, device):
         """Change the computing device (if this is needed)"""
