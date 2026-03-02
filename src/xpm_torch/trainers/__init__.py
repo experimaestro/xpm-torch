@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from datamaestro.record import Record, Item, record_type
+from lightning.fabric.wrappers import _FabricDataLoader
 
 
 from xpm_torch import Module, Sampler
@@ -16,7 +16,7 @@ from xpm_torch.trainers.context import (
     TrainingHook,
     TrainerContext,
 )
-from xpm_torch.utils.iter import SerializableIterator
+from torchdata.stateful_dataloader import StatefulDataLoader
 
 
 class Trainer(Config, EasyLogger):
@@ -54,7 +54,7 @@ class Trainer(Config, EasyLogger):
 
     def to(self, device):
         """Change the computing device (if this is needed)"""
-        
+
         for hook in self.context.hooks(nn.Module):
             hook.to(device)
 
@@ -69,20 +69,16 @@ class Trainer(Config, EasyLogger):
         ...
 
     @abstractmethod
-    def load_state_dict(self, state: Dict):
-        ...
+    def load_state_dict(self, state: Dict): ...
 
     @abstractmethod
-    def state_dict(self):
-        ...
+    def state_dict(self): ...
 
 
 class LossTrainer(Trainer):
     """Trainer based on a loss function
 
-    This trainer supposes that:
-
-    - the `sampler_iter` is initialized – and is a serializable iterator over batches
+    Uses StatefulDataLoader + IterableDataset for data loading.
     """
 
     batcher: Param[Batcher] = field(default_factory=Batcher.C)
@@ -94,37 +90,68 @@ class LossTrainer(Trainer):
     batch_size: Param[int] = 16
     """Number of samples per batch"""
 
-    sampler_iter: SerializableIterator
-    """The iterator over batches"""
+    num_workers: Param[int] = 2
+    """Number of DataLoader workers"""
+
+    dataloader: Optional[StatefulDataLoader] = None
+    """StatefulDataLoader for training data"""
 
     def initialize(
         self,
         random: np.random.RandomState,
         context: TrainerContext,
     ):
+        """Initialize the trainer, create the dataloader and initialize the loss function
+        Args:
+            random: Random state for initialization
+            context: TrainerContext for the training process
+        """
         super().initialize(random, context)
 
         self.sampler.initialize(random)
-
         self.batcher_worker = self.batcher.initialize(self.batch_size)
 
-    def iter_batches(self) -> SerializableIterator:
-        """Returns the batchwise iterator"""
-        return self.sampler_iter
+    def _create_dataloader(self, dataset, collate_fn):
+        """Create a StatefulDataLoader from a dataset and collate function."""
+        self.dataloader = StatefulDataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_fn,
+            num_workers=self.num_workers,
+        )
+
+    def iter_batches(self) -> Iterator:
+        """Returns an iterator over batches."""
+        assert self.dataloader is not None, (
+            "dataloader not initialized — call _create_dataloader() first"
+        )
+        return iter(self.dataloader)
 
     def load_state_dict(self, state: Dict):
-        self.sampler_iter.load_state_dict(state["sampler"])
+        if "dataloader" in state and self.dataloader is not None:
+            if isinstance(self.dataloader, _FabricDataLoader):
+                # If the dataloader is wrapped with Fabric, we need to load the state dict into the original dataloader
+                self.dataloader._dataloader.load_state_dict(state["dataloader"])
+            else:
+                self.dataloader.load_state_dict(state["dataloader"])
 
     def state_dict(self):
-        return {"sampler": self.sampler_iter.state_dict()}
+        assert self.dataloader is not None, "dataloader not initialized"
+        if isinstance(self.dataloader, _FabricDataLoader):
+            # If the dataloader is wrapped with Fabric, we need to get the state dict from the original dataloader
+            dataloader_state = self.dataloader._dataloader.state_dict()
+        else:
+            dataloader_state = self.dataloader.state_dict()
+            
+        return {"dataloader": dataloader_state}
 
-    def process_batch(self, batch: Record):
+    def process_batch(self, batch: list):
         """Compute loss for a given batch of records - called by the learner.
         important: this method uses the batcher to split the batch into microbatches when needed
         """
         self.batcher_worker.process(batch, self.process_microbatch, raise_oom=True)
 
-    def process_microbatch(self, records: Record):
+    def process_microbatch(self, records: list):
         """Combines a forward and backard
 
         This method can be implemented by specific trainers that use the gradient.
@@ -151,9 +178,7 @@ class LossTrainer(Trainer):
                 self.context.add_metric(
                     ScalarMetric("+".join(names), float(total_loss.item()), nrecords)
                 )
-            self.context.backward(
-                self.context.state.optimizer.scale(total_loss)
-            )
+            self.context.backward(self.context.state.optimizer.scale(total_loss))
 
     def train_batch(self, records):
         """This method should report"""

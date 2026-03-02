@@ -1,24 +1,34 @@
-from dataclasses import InitVar
 import sys
-from typing import Any
 import torch
 from torch.functional import Tensor
 from experimaestro import Param
+from typing import List, TypedDict
+from typing_extensions import ReadOnly
+
 from xpm_torch.losses.pairwise import PairwiseLoss
 from xpm_torch.metrics import ScalarMetric
-from xpmir.letor.records import (
-    PairwiseRecord,
-    PairwiseRecords,
-)
-from xpmir.utils.utils import foreach
-from xpmir.utils.iter import MultiprocessSerializableIterator
-import numpy as np
-from xpmir.letor.records import (
-    PairwiseRecord,
-    PairwiseRecords,
-)
-from xpmir.letor.samplers import PairwiseSampler, SerializableIterator
 from xpm_torch.trainers import TrainerContext, LossTrainer
+
+from xpmir.utils.utils import foreach
+import numpy as np
+from xpmir.letor.samplers import PairwiseSampler
+from xpmir.text import TokenizedTexts
+from xpmir.letor.records import (
+    PairwiseRecord,
+    PairwiseRecords,
+    ProductRecords,
+)
+
+class PairwiseInputs(TypedDict):
+    records: ReadOnly[PairwiseRecords]
+    tokenized_records: ReadOnly[TokenizedTexts]
+
+def pairwise_collate(records: List[PairwiseRecord]) -> PairwiseInputs:
+    """Collate individual PairwiseRecords into a PairwiseInputs batch."""
+    batch = PairwiseRecords()
+    for record in records:
+        batch.add(record)
+    return PairwiseInputs(records=batch, tokenized_records=None)
 
 
 class PairwiseTrainer(LossTrainer):
@@ -26,11 +36,6 @@ class PairwiseTrainer(LossTrainer):
 
     lossfn: Param[PairwiseLoss]
     """The loss function"""
-
-    sampler: Param[PairwiseSampler]
-    """The pairwise sampler"""
-
-    sampler_iter: InitVar[SerializableIterator[PairwiseRecord, Any]]
 
     def initialize(
         self,
@@ -41,13 +46,30 @@ class PairwiseTrainer(LossTrainer):
         self.lossfn.initialize(self.ranker)
         foreach(context.hooks(PairwiseLoss), lambda loss: loss.initialize(self.ranker))
         self.sampler.initialize(random)
-        self.sampler_iter = MultiprocessSerializableIterator(
-            self.sampler.pairwise_batch_iter(self.batch_size)
-        )
 
-    def train_batch(self, records: PairwiseRecords):
+        dataset = self.sampler.as_dataset()
+
+        if hasattr(self.ranker, "get_tokenizer_fn"):
+            tokenization_fn = self.ranker.get_tokenizer_fn()
+            def collate_fn_with_tokenization(samples: List[PairwiseRecord]) -> PairwiseInputs:
+                inputs = pairwise_collate(samples)
+                inputs["tokenized_records"] = tokenization_fn(inputs["records"])
+                return inputs
+            collate_fn = collate_fn_with_tokenization
+        else:
+            collate_fn = pairwise_collate
+
+        self._create_dataloader(dataset, collate_fn=collate_fn)
+
+    def train_batch(self, inputs: PairwiseInputs):
+        records = inputs["records"]
+        tokenized_records = inputs.get("tokenized_records")
+
         # Get the next batch and compute the scores for each query/document
-        rel_scores = self.ranker(records, self.context)
+        if tokenized_records is not None:
+            rel_scores = self.ranker(records, tokenized=tokenized_records, info=self.context)
+        else:
+            rel_scores = self.ranker(records, self.context)
 
         if torch.isnan(rel_scores).any() or torch.isinf(rel_scores).any():
             self.logger.error("nan or inf relevance score detected. Aborting.")
@@ -68,4 +90,3 @@ class PairwiseTrainer(LossTrainer):
             return (
                 scores_by_record[:, 0] > scores_by_record[:, 1]
             ).sum().float() / len(scores_by_record)
-        
