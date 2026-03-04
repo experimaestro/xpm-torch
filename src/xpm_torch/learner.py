@@ -246,13 +246,8 @@ class Learner(Task, EasyLogger):
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-        # Initialize the scorer and trainer
-        self.logger.info("model initialization")
-        
-        with fabric.init_module():#empty_init=True):
-            self.model.initialize()
-
-            # Initialize the context and the listeners
+        # Initialize the model and trainer
+        with fabric.init_module():
             self.trainer.initialize(self.random.state, self.context)
 
         # Wrap dataloader with Fabric for device placement (if using new path)

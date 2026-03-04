@@ -25,6 +25,34 @@ from xpm_torch.utils.utils import Initializable
 
 logger = logging.getLogger(__name__)
 
+
+def initialized(method):
+    """Decorator that ensures ``initialize()`` is called before the first
+    invocation, then replaces itself with the original method so subsequent
+    calls have zero overhead.
+
+    Usage::
+
+        class MyModule(Module):
+            @initialized
+            def forward(self, x):
+                ...
+    """
+
+    def wrapper(self, *args, **kwargs):
+        if not self._initialized:
+            self.initialize()
+        # Replace the wrapper with the unwrapped method on this instance
+        bound = method.__get__(self, type(self))
+        setattr(self, method.__name__, bound)
+        return method(self, *args, **kwargs)
+
+    # Preserve the original name/docstring for introspection
+    wrapper.__name__ = method.__name__
+    wrapper.__doc__ = method.__doc__
+    return wrapper
+
+
 class Module(Config, Initializable, nn.Module):
     """Base class for all modules containing parameters"""
 
