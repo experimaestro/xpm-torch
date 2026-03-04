@@ -19,6 +19,7 @@ class FabricConfiguration(Config):
     The backend is fabric, so the complete documentation can be found on
     https://lightning.ai/docs/fabric/stable/api/fabric_args.html
     """
+
     #parameters - change Learner output
     precision: Param[str] = "32-true"
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': 
@@ -35,16 +36,25 @@ class FabricConfiguration(Config):
     """Number of nodes"""
 
     devices: Meta[str] = "auto"
-    """List of devices to use"""
+    """Configure the devices to run on. 
+    See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#devices for more details and options.
+    Note that for multi-node training, you should specify the devices per node, e.g., devices="4" for 4 GPUs per node, not devices="16" for a total of 16 GPUs across 4 nodes.
+    """
 
     strategy: Meta[str] = "auto"
+    """The strategy to use
+    See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#strategy for more details and options.
+    """
 
     accelerator: Meta[str] = "auto"
-    """The accelerator to use"""
+    """The accelerator to use
+    See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#accelerator for more details and options.
+    """
     
     is_built = False
 
-    def get_Fabric(self, **kwargs):
+
+    def get_Fabric(self, **kwargs) -> L.Fabric:
         """Builds the Fabric object and set the torch.float32 matmul precision based on the configuration. 
         This is called by the Learner before launching the training loop
         """

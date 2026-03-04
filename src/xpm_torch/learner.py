@@ -159,9 +159,7 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
     
-    fabric_config: Param[FabricConfiguration] = field(
-        ignore_default=FabricConfiguration.C()
-    )
+    fabric_config: Param[FabricConfiguration] = field(default=FabricConfiguration.C())
     """Runtime configuration, managed by Fabric"""
 
 
