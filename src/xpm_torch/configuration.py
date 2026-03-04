@@ -1,9 +1,11 @@
+from abc import ABC, abstractmethod
 import logging
 from typing import Callable, Optional, ParamSpec
 from experimaestro import Config, Param, Meta
 import lightning.fabric.strategies as strategies
 import lightning as L
 import torch
+
 logger = logging.getLogger("xpm_torch.configuration")
 
 P = ParamSpec("P")
@@ -13,7 +15,18 @@ class Strategy(Config, strategies.Strategy):
     pass
 
 
-class FabricConfiguration(Config):
+class FabricConfigurationBase(Config, ABC):
+
+    def get_fabric(self, **kwargs) -> L.Fabric:
+        return self._get_fabric(**kwargs)
+
+    @abstractmethod
+    def _get_fabric(self, **kwargs) -> L.Fabric:
+        """Builds the Fabric object based on the configuration."""
+        ...
+
+
+class FabricConfiguration(FabricConfigurationBase):
     """Describe the computation device
 
     The backend is fabric, so the complete documentation can be found on
@@ -54,8 +67,8 @@ class FabricConfiguration(Config):
     is_built = False
 
 
-    def get_Fabric(self, **kwargs) -> L.Fabric:
-        """Builds the Fabric object and set the torch.float32 matmul precision based on the configuration. 
+    def _get_fabric(self, **kwargs) -> L.Fabric:
+        """Builds the Fabric object and set the torch.float32 matmul precision based on the configuration.
         This is called by the Learner before launching the training loop
         """
         if self.is_built:

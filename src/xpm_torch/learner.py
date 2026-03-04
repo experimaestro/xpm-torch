@@ -210,7 +210,7 @@ class Learner(Task, EasyLogger):
         """        
 
         # 1. Launch Fabric
-        fabric = self.fabric_config.get_Fabric()
+        fabric = self.fabric_config.get_fabric()
         fabric.launch()
 
         self.optimizer = ScheduledOptimizer()
