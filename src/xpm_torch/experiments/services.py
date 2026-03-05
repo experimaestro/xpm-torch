@@ -1,5 +1,6 @@
 import logging
 import re
+import socket
 import time
 from pathlib import Path
 from sys import executable
@@ -64,7 +65,16 @@ class TensorboardService(ProcessWebService):
     def description(self):
         return "Tensorboard service"
 
+    @staticmethod
+    def _find_available_port(start: int = 6006, max_tries: int = 100) -> int:
+        for port in range(start, start + max_tries):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("localhost", port)) != 0:
+                    return port
+        return 0
+
     def _build_command(self) -> list[str]:
+        port = self._find_available_port()
         return [
             executable,
             "-m",
@@ -74,7 +84,7 @@ class TensorboardService(ProcessWebService):
             "--host",
             "localhost",
             "--port",
-            "0",
+            str(port),
         ]
 
     def _wait_for_ready(self) -> str:
