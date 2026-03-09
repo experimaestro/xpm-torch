@@ -82,7 +82,7 @@ class FabricConfiguration(FabricConfigurationBase):
                 self.torch_fp32_precision = "medium"
             else:
                 self.torch_fp32_precision = "high"
-            logger.info(f"Setting torch.fp32 matmul precision to {self.torch_fp32_precision} based on fabric precision {self.precision}")
+            logger.info(f"Setting torch.fp32 matmul precision to '{self.torch_fp32_precision}' based on fabric precision '{self.precision}'")
         
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
