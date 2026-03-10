@@ -10,19 +10,19 @@ from xpm_torch.trainers import TrainerContext, LossTrainer
 
 from xpmir.text import TokenizedTexts
 from xpmir.letor.samplers import BatchwiseSampler
-from xpmir.letor.records import BatchwiseRecords
+from xpmir.letor.records import BatchwiseItems
 from xpmir.letor.records import (
-    PairwiseRecord,
-    PairwiseRecords,
-    ProductRecords,
+    PairwiseItem,
+    PairwiseItems,
+    ProductItems,
 )
 
 class BatchwiseInputs(TypedDict):
-    records: ReadOnly[ProductRecords]
+    records: ReadOnly[ProductItems]
     tokenized_records: ReadOnly[TokenizedTexts]
 
-def batchwise_collate(records: List[PairwiseRecord]) -> BatchwiseInputs:
-    """Collate PairwiseRecords into a ProductRecords batch with in-batch negatives.
+def batchwise_collate(records: List[PairwiseItem]) -> BatchwiseInputs:
+    """Collate PairwiseItems into a ProductItems batch with in-batch negatives.
 
     Builds a relevance matrix where the diagonal (positive docs) = 1
     and off-diagonal (other queries' negatives) = 0.
@@ -32,7 +32,7 @@ def batchwise_collate(records: List[PairwiseRecord]) -> BatchwiseInputs:
         (torch.eye(batch_size), torch.zeros(batch_size, batch_size)), 1
     )
 
-    batch = ProductRecords()
+    batch = ProductItems()
     positives = []
     negatives = []
     for record in records:
@@ -71,7 +71,7 @@ class BatchwiseTrainer(LossTrainer):
 
         if hasattr(self.ranker, "get_tokenizer_fn"):
             tokenization_fn = self.ranker.get_tokenizer_fn()
-            def collate_fn_with_tokenization(samples: List[PairwiseRecord]) -> BatchwiseInputs:
+            def collate_fn_with_tokenization(samples: List[PairwiseItem]) -> BatchwiseInputs:
                 inputs = batchwise_collate(samples)
                 inputs["tokenized_records"] = tokenization_fn(inputs["records"])
                 return inputs

@@ -14,18 +14,18 @@ import numpy as np
 from xpmir.letor.samplers import PairwiseSampler
 from xpmir.text import TokenizedTexts
 from xpmir.letor.records import (
-    PairwiseRecord,
-    PairwiseRecords,
-    ProductRecords,
+    PairwiseItem,
+    PairwiseItems,
+    ProductItems,
 )
 
 class PairwiseInputs(TypedDict):
-    records: ReadOnly[PairwiseRecords]
+    records: ReadOnly[PairwiseItems]
     tokenized_records: ReadOnly[TokenizedTexts]
 
-def pairwise_collate(records: List[PairwiseRecord]) -> PairwiseInputs:
-    """Collate individual PairwiseRecords into a PairwiseInputs batch."""
-    batch = PairwiseRecords()
+def pairwise_collate(records: List[PairwiseItem]) -> PairwiseInputs:
+    """Collate individual PairwiseItems into a PairwiseInputs batch."""
+    batch = PairwiseItems()
     for record in records:
         batch.add(record)
     return PairwiseInputs(records=batch, tokenized_records=None)
@@ -51,7 +51,7 @@ class PairwiseTrainer(LossTrainer):
 
         if hasattr(self.ranker, "get_tokenizer_fn"):
             tokenization_fn = self.ranker.get_tokenizer_fn()
-            def collate_fn_with_tokenization(samples: List[PairwiseRecord]) -> PairwiseInputs:
+            def collate_fn_with_tokenization(samples: List[PairwiseItem]) -> PairwiseInputs:
                 inputs = pairwise_collate(samples)
                 inputs["tokenized_records"] = tokenization_fn(inputs["records"])
                 return inputs
