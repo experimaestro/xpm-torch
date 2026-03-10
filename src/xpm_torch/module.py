@@ -100,17 +100,12 @@ class ModuleList(Module, Initializable):
 class ModuleLoader(PathSerializationLWTask):
     def execute(self):
         """Loads the model from disk using the given serialization path"""
-        logger.info("Loading model from disk: %s", self.path)
+        #first initialize model structure (empty init)
         self.value.initialize()
+        #then load state dict 
+        logger.info("Loading model from disk: %s", self.path)
         data = torch.load(self.path)
-
-        # Check if model has the dummy param; if not, remove it from data
-        if "_dummy_param" in data and "_dummy_param" not in self.value.state_dict():
-            logger.debug(
-                "Ignoring '_dummy_param' as it is not present in the model architecture."
-            )
-            data.pop("_dummy_param")
-
+        
         self.value.load_state_dict(data)
 
 
