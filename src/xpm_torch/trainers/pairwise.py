@@ -9,14 +9,12 @@ from xpm_torch.losses.pairwise import PairwiseLoss
 from xpm_torch.metrics import ScalarMetric
 from xpm_torch.trainers import TrainerContext, LossTrainer
 
-from xpmir.utils.utils import foreach
 import numpy as np
-from xpmir.letor.samplers import PairwiseSampler
+
 from xpmir.text import TokenizedTexts
 from xpmir.letor.records import (
     PairwiseItem,
     PairwiseItems,
-    ProductItems,
 )
 
 class PairwiseInputs(TypedDict):
@@ -44,7 +42,8 @@ class PairwiseTrainer(LossTrainer):
     ):
         super().initialize(random, context)
         self.lossfn.initialize(self.ranker)
-        foreach(context.hooks(PairwiseLoss), lambda loss: loss.initialize(self.ranker))
+        for hook in context.hooks(PairwiseLoss):
+            hook.initialize(self.ranker)
         self.sampler.initialize(random)
 
         dataset = self.sampler.as_dataset()

@@ -9,11 +9,8 @@ from xpm_torch.losses.batchwise import BatchwiseLoss
 from xpm_torch.trainers import TrainerContext, LossTrainer
 
 from xpmir.text import TokenizedTexts
-from xpmir.letor.samplers import BatchwiseSampler
-from xpmir.letor.records import BatchwiseItems
 from xpmir.letor.records import (
     PairwiseItem,
-    PairwiseItems,
     ProductItems,
 )
 

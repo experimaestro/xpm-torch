@@ -6,7 +6,7 @@ from torch.functional import Tensor
 from experimaestro import Config, Param
 
 from xpmir.rankers import ScorerOutputType
-from xpmir.utils.utils import EasyLogger
+from xpm_torch.utils.logging import EasyLogger
 from xpm_torch.losses import Loss, bce_with_logits_loss
 
 from xpm_torch.trainers import TrainerContext
