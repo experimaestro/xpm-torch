@@ -147,7 +147,7 @@ class ModuleContainer(nn.Module):
 
         return manageable
 
-    def setup_with_fabric(self, fabric):
+    def setup_with_fabric(self, fabric) -> None:
         """
         Self-identifies which children need Fabric wrapping.
         """
@@ -161,7 +161,7 @@ class ModuleContainer(nn.Module):
             # Wrap the module and re-assign it
             wrapped = fabric.setup(module)
             setattr(self, name, wrapped)
-            logger.debug(f"Registered {name} with Fabric on {fabric.device}")
+            logger.debug(f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}")
 
 
 def find_module_attributes(obj) -> dict:
