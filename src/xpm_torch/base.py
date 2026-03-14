@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, TypeVar, Sequence, Iterator, Iterable
+from typing import Optional, TypeVar, Generic, Sequence, Iterator, Iterable
 import numpy as np
 from functools import cached_property
 from experimaestro import Config, Param
@@ -22,7 +22,10 @@ class Random(Config):
         return {"seed": self.seed}
 
 
-class Sampler(Config, EasyLogger):
+SampleT = TypeVar("SampleT")
+
+
+class Sampler(Config, EasyLogger, Generic[SampleT]):
     """Abstract data sampler"""
 
     def initialize(self, random: Optional[np.random.RandomState]):
