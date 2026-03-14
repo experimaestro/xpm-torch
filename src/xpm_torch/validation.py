@@ -14,7 +14,7 @@ from experimaestro import (
     Meta,
     field,
 )
-from datamaestro_text.data.ir import (
+from datamaestro_ir.data import (
     Adhoc,
 )
 from xpm_torch import Module, Random
