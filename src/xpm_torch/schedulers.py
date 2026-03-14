@@ -1,5 +1,5 @@
 from torch.optim.lr_scheduler import LambdaLR
-from experimaestro import Config, Param
+from experimaestro import field, Config, Param
 
 
 class Scheduler(Config):
@@ -15,7 +15,7 @@ class LinearWithWarmup(Scheduler):
     num_warmup_steps: Param[int]
     """Number of warmup steps"""
 
-    min_factor: Param[float] = 0.0
+    min_factor: Param[float] = field(default=0.0, ignore_default=True)
     """Minimum multiplicative factor"""
 
     def lr_lambda(self, current_step: int, num_training_steps: int):
@@ -53,7 +53,7 @@ class CosineWithWarmup(Scheduler):
     num_warmup_steps: Param[int]
     """Number of warmup steps"""
 
-    num_cycles: Param[float] = 0.5
+    num_cycles: Param[float] = field(default=0.5, ignore_default=True)
     """Number of cycles"""
 
     def __call__(self, optimizer, num_training_steps, *, last_epoch=-1):

@@ -22,14 +22,14 @@ from torchdata.stateful_dataloader import StatefulDataLoader
 class Trainer(Config, EasyLogger):
     """Generic trainer"""
 
-    hooks: Param[List[TrainingHook]] = []
+    hooks: Param[List[TrainingHook]] = field(default=[], ignore_default=True)
     """Hooks for this trainer: this includes the losses, but can be adapted for
         other uses
 
         The specific list of hooks depends on the specific trainer
     """
 
-    model: Param[Optional[Module]] = None
+    model: Param[Optional[Module]] = field(default=None, ignore_default=True)
     """If the model to optimize is different from the model passsed to Learn,
     this parameter can be used – initialization is still expected to be done at
     the learner level"""
@@ -87,10 +87,10 @@ class LossTrainer(Trainer):
     sampler: Param[Sampler]
     """The sampler to use"""
 
-    batch_size: Param[int] = 16
+    batch_size: Param[int] = field(default=16, ignore_default=True)
     """Number of samples per batch"""
 
-    num_workers: Param[int] = 2
+    num_workers: Param[int] = field(default=2, ignore_default=True)
     """Number of DataLoader workers"""
 
     dataloader: Optional[StatefulDataLoader] = None

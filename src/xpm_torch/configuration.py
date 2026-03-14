@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import logging
 from typing import Callable, Optional, ParamSpec
-from experimaestro import Config, Param, Meta
+from experimaestro import field, Config, Param, Meta
 import lightning.fabric.strategies as strategies
 import lightning as L
 import torch
@@ -34,7 +34,7 @@ class FabricConfiguration(FabricConfigurationBase):
     """
 
     #parameters - change Learner output
-    precision: Param[str] = "32-true"
+    precision: Param[str] = field(default="32-true", ignore_default=True)
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': 
     see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
     """
@@ -45,21 +45,21 @@ class FabricConfiguration(FabricConfigurationBase):
     """
     
     # Meta - parameters - don't change output, just computing environment
-    num_nodes: Meta[int] = 1
+    num_nodes: Meta[int] = field(default=1, ignore_default=True)
     """Number of nodes"""
 
-    devices: Meta[str] = "auto"
+    devices: Meta[str] = field(default="auto", ignore_default=True)
     """Configure the devices to run on. 
     See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#devices for more details and options.
     Note that for multi-node training, you should specify the devices per node, e.g., devices="4" for 4 GPUs per node, not devices="16" for a total of 16 GPUs across 4 nodes.
     """
 
-    strategy: Meta[str] = "auto"
+    strategy: Meta[str] = field(default="auto", ignore_default=True)
     """The strategy to use
     See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#strategy for more details and options.
     """
 
-    accelerator: Meta[str] = "auto"
+    accelerator: Meta[str] = field(default="auto", ignore_default=True)
     """The accelerator to use
     See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#accelerator for more details and options.
     """

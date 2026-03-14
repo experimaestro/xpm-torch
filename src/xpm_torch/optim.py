@@ -43,10 +43,10 @@ class Optimizer(Config):
 class SGD(Optimizer):
     """Wrapper for SGD optimizer in Pytorch"""
 
-    lr: Param[float] = 1e-5
+    lr: Param[float] = field(default=1e-5, ignore_default=True)
     """Learning rate"""
 
-    weight_decay: Param[float] = 0.0
+    weight_decay: Param[float] = field(default=0.0, ignore_default=True)
     """Weight decay (L2)"""
 
     def __call__(self, parameters):
@@ -61,13 +61,13 @@ class Adafactor(Optimizer):
     See :class:`transformers.optimization.Adafactor` for full documentation
     """
 
-    lr: Param[Optional[float]] = None
+    lr: Param[Optional[float]] = field(default=None, ignore_default=True)
     """Learning rate"""
 
-    weight_decay: Param[float] = 0.0
+    weight_decay: Param[float] = field(default=0.0, ignore_default=True)
     """Weight decay (L2)"""
 
-    relative_step: Param[bool] = True
+    relative_step: Param[bool] = field(default=True, ignore_default=True)
     """If true, time-dependent learning rate is computed instead of external
     learning rate"""
 
@@ -85,13 +85,13 @@ class Adafactor(Optimizer):
 class Adam(Optimizer):
     """Wrapper for Adam optimizer in PyTorch"""
 
-    lr: Param[float] = 1e-3
+    lr: Param[float] = field(default=1e-3, ignore_default=True)
     """Learning rate"""
 
-    weight_decay: Param[float] = 0.0
+    weight_decay: Param[float] = field(default=0.0, ignore_default=True)
     """Weight decay (L2)"""
 
-    eps: Param[float] = 1e-8
+    eps: Param[float] = field(default=1e-8, ignore_default=True)
 
     def __call__(self, parameters):
         from torch.optim import Adam
@@ -108,9 +108,9 @@ class AdamW(Optimizer):
     <https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html>`_
     """
 
-    lr: Param[float] = 1e-3
-    weight_decay: Param[float] = 1e-2
-    eps: Param[float] = 1e-8
+    lr: Param[float] = field(default=1e-3, ignore_default=True)
+    weight_decay: Param[float] = field(default=1e-2, ignore_default=True)
+    eps: Param[float] = field(default=1e-8, ignore_default=True)
 
     def __call__(self, parameters):
         from torch.optim import AdamW
@@ -133,10 +133,10 @@ class RegexParameterFilter(ParameterFilter):
     """gives the name of the model to do the filtrage
     Precondition: Only and just one of the includes and excludes can be None"""
 
-    includes: Param[Optional[List[str]]] = None
+    includes: Param[Optional[List[str]]] = field(default=None, ignore_default=True)
     """The str of params to be included from the model"""
 
-    excludes: Param[Optional[List[str]]] = None
+    excludes: Param[Optional[List[str]]] = field(default=None, ignore_default=True)
     """The str of params to be excludes from the model"""
 
     def __init__(self):
@@ -247,7 +247,7 @@ class GradientClippingHook(GradientHook):
 class GradientLogHook(GradientHook):
     """ "Log the gradient norm"""
 
-    name: Param[str] = "gradient_norm"
+    name: Param[str] = field(default="gradient_norm", ignore_default=True)
 
     def __call__(self, main: "ScheduledOptimizer"):
         sum_norms = 0.0

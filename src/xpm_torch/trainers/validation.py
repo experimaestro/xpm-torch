@@ -3,7 +3,7 @@ import json
 from typing import Dict, Any
 from pathlib import Path
 
-from experimaestro import Annotated, Param, pathgenerator
+from experimaestro import field, Annotated, Param, pathgenerator
 
 from xpm_torch import SampleIterator
 from xpm_torch.batchers import Batcher
@@ -28,7 +28,7 @@ class TrainerValidationLoss(LearnerListener):
     data: Param[SampleIterator]
     """The dataset to use"""
 
-    batcher: Param[Batcher] = Batcher()
+    batcher: Param[Batcher] = field(default=Batcher(), ignore_default=True)
     """How to batch samples together"""
 
     batch_size: Param[int]
@@ -37,7 +37,7 @@ class TrainerValidationLoss(LearnerListener):
     trainer: Param[LossTrainer]
     """The trainer"""
 
-    warmup: Param[int] = -1
+    warmup: Param[int] = field(default=-1, ignore_default=True)
     """How many epochs before actually computing the validation loss"""
 
     bestpath: Annotated[Path, pathgenerator("best")]
@@ -46,10 +46,10 @@ class TrainerValidationLoss(LearnerListener):
     info: Annotated[Path, pathgenerator("info.json")]
     """Path to the JSON file that contains the metric values at each epoch"""
 
-    validation_interval: Param[int] = 1
+    validation_interval: Param[int] = field(default=1, ignore_default=True)
     """Epochs between each validation"""
 
-    early_stop: Param[int] = 0
+    early_stop: Param[int] = field(default=0, ignore_default=True)
     """Number of epochs without improvement after which we stop learning.
     Should be a multiple of validation_interval or 0 (no early stopping)"""
 

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, TypeVar, Generic, Sequence, Iterator, Iterable
 import numpy as np
 from functools import cached_property
-from experimaestro import Config, Param
+from experimaestro import field, Config, Param
 from xpm_torch.utils.logging import EasyLogger
 
 T = TypeVar("T")
@@ -11,7 +11,7 @@ T = TypeVar("T")
 class Random(Config):
     """Random configuration"""
 
-    seed: Param[int] = 0
+    seed: Param[int] = field(default=0, ignore_default=True)
     """The seed to use so the random process is deterministic"""
 
     @cached_property

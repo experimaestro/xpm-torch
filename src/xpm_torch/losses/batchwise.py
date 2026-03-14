@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from experimaestro import Config, Param
+from experimaestro import field, Config, Param
 from xpm_torch.losses import Loss
 from xpmir.rankers import ScorerOutputType
 from xpm_torch.trainers import TrainerContext
@@ -9,7 +9,7 @@ from xpm_torch.trainers import TrainerContext
 class BatchwiseLoss(Config):
     NAME = "?"
 
-    weight: Param[float] = 1.0
+    weight: Param[float] = field(default=1.0, ignore_default=True)
     """The weight of this loss"""
 
     def initialize(self, context: TrainerContext):

@@ -3,7 +3,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 import torch.nn as nn
 from typing import Iterator, NamedTuple
-from experimaestro import Param, Config, PathSerializationLWTask
+from experimaestro import field, Param, Config, PathSerializationLWTask
 import torch
 from xpm_torch.optim import Module, ModuleLoader
 import logging
@@ -69,7 +69,7 @@ class ParametersIterator(Config, ABC):
 class RegexParametersIterator(ParametersIterator):
     """Itertor over all the parameters which match the given regex"""
 
-    negative_regex: Param[str] = ""
+    negative_regex: Param[str] = field(default="", ignore_default=True)
     """The negative regex expression (should not match)"""
 
     regex: Param[str]
@@ -178,7 +178,7 @@ class PartialModuleLoader(PathSerializationLWTask):
     selector: Param[ParametersIterator]
     """The selectors gives the list of parameters for which some"""
 
-    mapper: Param[Optional[NameMapper]] = None
+    mapper: Param[Optional[NameMapper]] = field(default=None, ignore_default=True)
     """Maps parameter names so it matches so the saved ones"""
 
     def execute(self):
@@ -259,7 +259,7 @@ class SubModuleLoader(PathSerializationLWTask):
     """The selectors gives the list of parameters for which
     loaded parameters should be used"""
 
-    saved_value: Param[Optional[Module]] = None
+    saved_value: Param[Optional[Module]] = field(default=None, ignore_default=True)
     """The original module that is being loaded (optional,
     allows to map names)"""
 

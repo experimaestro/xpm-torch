@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.functional import Tensor
-from experimaestro import Config, Param
+from experimaestro import field, Config, Param
 
 from xpmir.rankers import ScorerOutputType
 from xpm_torch.utils.logging import EasyLogger
@@ -16,7 +16,7 @@ class PairwiseLoss(Config, nn.Module):
 
     NAME = "?"
 
-    weight: Param[float] = 1.0
+    weight: Param[float] = field(default=1.0, ignore_default=True)
     """The weight :math:`w` with which the loss is multiplied (useful when
     combining with other ones)"""
 
@@ -77,7 +77,7 @@ class HingeLoss(PairwiseLoss):
 
     NAME = "hinge"
 
-    margin: Param[float] = 1.0
+    margin: Param[float] = field(default=1.0, ignore_default=True)
     """The margin for the Hinge loss"""
 
     def compute(self, rel_scores_by_record, info: TrainerContext):

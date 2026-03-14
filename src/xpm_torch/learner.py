@@ -62,7 +62,7 @@ class LearnerListenerStatus(Enum):
 class CheckpointModuleLoader(ModuleLoader):
     """Useful to load a specific checkpoint"""
 
-    epoch: Param[Optional[int]] = None
+    epoch: Param[Optional[int]] = field(default=None, ignore_default=True)
     """The epoch of the checkpoint"""
 
 
@@ -130,10 +130,10 @@ class Learner(Task, EasyLogger):
     MultipleModel.
     """
 
-    max_epochs: Param[int] = 1000
+    max_epochs: Param[int] = field(default=1000, ignore_default=True)
     """Maximum number of epochs"""
 
-    steps_per_epoch: Param[int] = 128
+    steps_per_epoch: Param[int] = field(default=128, ignore_default=True)
     """Number of steps for one epoch (after each epoch results are logged)"""
 
     optimizers: Param[List[ParameterOptimizer]]
@@ -143,7 +143,7 @@ class Learner(Task, EasyLogger):
     """Listeners are in charge of handling the validation of the model, and
     saving the relevant checkpoints"""
 
-    checkpoint_interval: Param[int] = 1
+    checkpoint_interval: Param[int] = field(default=1, ignore_default=True)
     """Number of epochs between each checkpoint"""
 
     logpath: Annotated[Path, pathgenerator("runs")]
@@ -152,7 +152,7 @@ class Learner(Task, EasyLogger):
     checkpointspath: Annotated[Path, pathgenerator("checkpoints")]
     """The path to the checkpoints"""
 
-    hooks: Param[List[Hook]] = []
+    hooks: Param[List[Hook]] = field(default=[], ignore_default=True)
     """Global learning hooks
 
     :class:`Initialization hooks <xpm_torch.context.InitializationHook>` are called
