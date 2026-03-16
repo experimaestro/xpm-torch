@@ -1,5 +1,6 @@
 import torch
 from typing import NamedTuple
+from enum import Enum
 
 class Loss(NamedTuple):
     """A loss"""
@@ -7,6 +8,19 @@ class Loss(NamedTuple):
     name: str
     value: torch.Tensor
     weight: float
+
+
+class ModuleOutputType(Enum):
+    REAL = 0
+    """An unbounded scalar value"""
+
+    LOG_PROBABILITY = 1
+    """A log probability, bounded by 0"""
+
+    PROBABILITY = 2
+    """A probability, in ]0,1["""
+
+
 
 class BCEWithLogLoss(torch.autograd.Function):
     """Binary cross-entropy loss when outputs are log probabilities

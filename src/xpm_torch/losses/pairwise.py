@@ -5,11 +5,10 @@ import torch.nn.functional as F
 from torch.functional import Tensor
 from experimaestro import field, Config, Param
 
-from xpmir.rankers import ScorerOutputType
 from xpm_torch.utils.logging import EasyLogger
-from xpm_torch.losses import Loss, bce_with_logits_loss
-
+from xpm_torch.losses import Loss, bce_with_logits_loss, ModuleOutputType
 from xpm_torch.trainers import TrainerContext
+
 
 class PairwiseLoss(Config, nn.Module):
     """Base class for any pairwise loss"""
@@ -108,13 +107,13 @@ class PointwiseCrossEntropyLoss(PairwiseLoss, EasyLogger):
     def initialize(self, ranker):
         super().initialize(ranker)
         self.rankerOutputType = ranker.outputType
-        if ranker.outputType == ScorerOutputType.REAL:
+        if ranker.outputType == ModuleOutputType.REAL:
             self.logger.info("Ranker outputs logits: using BCEWithLogitsLoss")
             self.loss = nn.BCEWithLogitsLoss()
-        elif ranker.outputType == ScorerOutputType.PROBABILITY:
+        elif ranker.outputType == ModuleOutputType.PROBABILITY:
             self.logger.info("Ranker outputs probabilities: using BCELoss")
             self.loss = nn.BCELoss()
-        elif ranker.outputType == ScorerOutputType.LOG_PROBABILITY:
+        elif ranker.outputType == ModuleOutputType.LOG_PROBABILITY:
             self.logger.info("Ranker outputs probabilities: using BCEWithLogLoss")
             self.loss = bce_with_logits_loss
         else:

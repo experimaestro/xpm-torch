@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
 from experimaestro import field, Config, Param
-from xpm_torch.losses import Loss
-from xpmir.rankers import ScorerOutputType
+from xpm_torch.losses import Loss, ModuleOutputType
 from xpm_torch.trainers import TrainerContext
 
 
@@ -51,9 +50,9 @@ class SoftmaxCrossEntropy(BatchwiseLoss):
         super().initialize(context)
         self.mode = context.state.model.outputType
         self.normalize = {
-            ScorerOutputType.REAL: lambda x: F.log_softmax(x, -1),
-            ScorerOutputType.LOG_PROBABILITY: lambda x: x,
-            ScorerOutputType.PROBABILITY: lambda x: x.log(),
+            ModuleOutputType.REAL: lambda x: F.log_softmax(x, -1),
+            ModuleOutputType.LOG_PROBABILITY: lambda x: x,
+            ModuleOutputType.PROBABILITY: lambda x: x.log(),
         }[context.state.model.outputType]
 
     def compute(self, scores, relevances, context):
