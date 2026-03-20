@@ -4,7 +4,11 @@ from typing import (
     TYPE_CHECKING,
 )
 from pathlib import Path
-import os, json, torch, logging
+import os
+import json
+import shutil
+import torch
+import logging
 
 from torch.utils.tensorboard.writer import SummaryWriter
 from shutil import rmtree
@@ -28,6 +32,7 @@ class TrainState:
     """Represents a training state for serialization"""
 
     MODEL_PATH = "model.pth"
+    MODEL_DIR = "model"
 
     epoch: int
     """The epoch"""
@@ -82,7 +87,9 @@ class TrainState:
         with (path / "info.json").open("wt") as fp:
             json.dump(self.state_dict(), fp)
 
-        torch.save(self.model.state_dict(), path / TrainState.MODEL_PATH)
+        model_dir = path / self.MODEL_DIR
+        model_dir.mkdir()
+        self.model.save_model(model_dir)
         torch.save(self.trainer.state_dict(), path / "trainer.pth")
         torch.save(self.optimizer.state_dict(), path / "optimizer.pth")
 
@@ -91,7 +98,14 @@ class TrainState:
     def load(self, path, onlyinfo=False):
         """Loads the state from disk"""
         if not onlyinfo:
-            self.model.load_state_dict(torch.load(path / TrainState.MODEL_PATH))
+            model_dir = path / self.MODEL_DIR
+            if model_dir.exists():
+                self.model.load_model(model_dir)
+            else:
+                # Backward compat: load from legacy model.pth
+                self.model.load_state_dict(
+                    torch.load(path / self.MODEL_PATH, map_location="cpu", weights_only=True)
+                )
             self.trainer.load_state_dict(torch.load(path / "trainer.pth"))
             self.optimizer.load_state_dict(torch.load(path / "optimizer.pth"))
 
@@ -102,8 +116,14 @@ class TrainState:
 
     def copy_model(self, path: Path):
         assert self.path is not None
-        for name in [TrainState.MODEL_PATH, "info.json"]:
-            os.link(self.path / name, path / name)
+        # Copy info.json
+        os.link(self.path / "info.json", path / "info.json")
+        # Copy model dir or legacy model.pth
+        model_dir = self.path / self.MODEL_DIR
+        if model_dir.exists():
+            shutil.copytree(model_dir, path / self.MODEL_DIR)
+        else:
+            os.link(self.path / self.MODEL_PATH, path / self.MODEL_PATH)
 
 
 class TrainingHook(Hook):

@@ -1,25 +1,15 @@
 from typing import (
     List,
     Dict,
-    Type,
-    TypeVar,
-    Union,
-    Optional,
 )
 from pathlib import Path
-import torch, logging
+import torch
+import logging
 import torch.nn as nn
 from experimaestro import (
     Config,
     PathSerializationLWTask,
-    Task,
-    LightweightTask,
     Param,
-    Meta,
-    Constant,
-    DataPath,
-    serialize,
-    deserialize,
 )
 from xpm_torch.utils.utils import Initializable
 
@@ -72,6 +62,19 @@ class Module(Config, Initializable, nn.Module):
     def device(self):
         return next(self.parameters()).device
 
+    def save_model(self, path: Path):
+        """Save model parameters to a directory using safetensors."""
+        from safetensors.torch import save_file
+
+        path.mkdir(parents=True, exist_ok=True)
+        save_file(self.state_dict(), str(path / "model.safetensors"))
+
+    def load_model(self, path: Path):
+        """Load model parameters from a directory."""
+        from safetensors.torch import load_file
+
+        self.load_state_dict(load_file(str(path / "model.safetensors")))
+
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
 
@@ -100,13 +103,16 @@ class ModuleList(Module, Initializable):
 class ModuleLoader(PathSerializationLWTask):
     def execute(self):
         """Loads the model from disk using the given serialization path"""
-        #first initialize model structure (empty init)
+        # First initialize model structure (empty init)
         self.value.initialize()
-        #then load state dict 
+        # Then load weights: try model/ directory first, fall back to model.pth
         logger.info("Loading model from disk: %s", self.path)
-        data = torch.load(self.path)
-        
-        self.value.load_state_dict(data)
+        model_dir = self.path / "model"
+        if model_dir.exists():
+            self.value.load_model(model_dir)
+        else:
+            data = torch.load(self.path / "model.pth", map_location="cpu", weights_only=True)
+            self.value.load_state_dict(data)
 
 
 class ModuleContainer(nn.Module):
