@@ -4,7 +4,7 @@ logger = logging.getLogger("xpm_torch.context")
 logger.setLevel(logging.INFO)
 
 
-from typing import Callable, DefaultDict, Dict, List, Type, TypeVar
+from typing import Callable, DefaultDict, List, Type, TypeVar
 from experimaestro import Config
 
 

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Callable, Optional, ParamSpec
+from typing import Optional, ParamSpec
 from experimaestro import field, Config, Param, Meta
 import lightning.fabric.strategies as strategies
 import lightning as L

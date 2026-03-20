@@ -13,7 +13,8 @@ from typing import (
 )
 import inspect
 import logging
-import os, re
+import os
+import re
 import torch
 from pathlib import Path
 from subprocess import run

@@ -4,21 +4,21 @@ import json
 from typing import Optional
 from huggingface_hub import PyTorchModelHubMixin, snapshot_download, hf_hub_download
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
-import torch, os, logging, shutil
+import torch
+import os
+import logging
+import shutil
 from typing import (
-    List,
     Dict,
     Type,
     TypeVar,
     Union,
-    Optional,
 )
 
 from experimaestro import (
     LightweightTask,
     Param,
     Meta,
-    Constant,
     DataPath,
     serialize,
     deserialize,

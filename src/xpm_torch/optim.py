@@ -1,11 +1,8 @@
-from lightning import Fabric
-from enum import Enum
-import threading, logging
-from typing import Any, Dict, Callable, List, Optional, TYPE_CHECKING, Union
+import threading
+import logging
+from typing import Any, Callable, List, Optional, TYPE_CHECKING, Union
 from pathlib import Path
-import numpy as np
 import torch
-import torch.nn as nn
 import re
 
 from experimaestro import (
@@ -13,7 +10,6 @@ from experimaestro import (
     Param,
     tagspath,
     Task,
-    PathSerializationLWTask,
     experiment,
     RunMode,
     field,
@@ -24,10 +20,10 @@ from experimaestro.scheduler.services import WebService
 
 from xpm_torch.utils.logging import LazyJoin
 from xpm_torch.context import Hook, Context
-from xpm_torch.utils.utils import Initializable, foreach
+from xpm_torch.utils.utils import foreach
 from xpm_torch.metrics import ScalarMetric
 from .schedulers import Scheduler
-from .module import Module, ModuleContainer, ModuleLoader
+from .module import Module, ModuleLoader
 
 if TYPE_CHECKING:
     from xpm_torch.trainers import TrainerContext

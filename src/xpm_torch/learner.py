@@ -3,7 +3,7 @@ from time import perf_counter
 import torch
 import numpy as np
 from pathlib import Path
-from typing import Dict, Iterator, List, NamedTuple, Any, Optional, Union
+from typing import Dict, Iterator, List, NamedTuple, Any, Optional
 from experimaestro import (
     Task,
     Config,

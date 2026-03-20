@@ -6,13 +6,14 @@ from typing import (
     Optional,
 )
 from pathlib import Path
-import torch, os, logging, shutil
+import torch
+import os
+import logging
+import shutil
 import torch.nn as nn
 from experimaestro.core.arguments import Meta
 from experimaestro import (
     field,
-    Config,
-    Task,
     LightweightTask,
     Param,
     Constant,
