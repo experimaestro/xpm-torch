@@ -161,24 +161,37 @@ the on-disk format:
             if (path / "query_encoder").exists():
                 self.query_encoder.load_model(path / "query_encoder")
 
-:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` / :meth:`~xpm_torch.module.ModuleLoader.hub_readme_extra`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` and :meth:`~xpm_torch.module.ModuleLoader.hub_readme_sections`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To write additional files alongside the model weights during Hub export
 (e.g. sentence-transformers compatibility configs), create a custom
 :class:`~xpm_torch.module.ModuleLoader` subclass and override
-:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras`:
+:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras`.
+
+To add sections to the README, override
+:meth:`~xpm_torch.module.ModuleLoader.hub_readme_sections` and return a
+list of :class:`~xpm_torch.module.ReadmeSection`. Each section has a
+``key``, ``content``, and optional ``before``/``after`` constraints for
+positioning relative to the base sections (``frontmatter``,
+``description``, ``usage``, ``results``):
 
 .. code-block:: python
 
-    from xpm_torch.module import ModuleLoader
+    from xpm_torch.module import ModuleLoader, ReadmeSection
 
     class MyCustomLoader(ModuleLoader):
         def write_hub_extras(self, save_directory):
             (save_directory / "my_config.json").write_text('{"format": "custom"}')
 
-        def hub_readme_extra(self) -> str:
-            return "\n## Custom loading\n\nUse `MyLibrary.load(...)` to load.\n"
+        def hub_readme_sections(self):
+            return [
+                ReadmeSection(
+                    key="quick_loading",
+                    content="## Quick loading\n\n```python\nmodel = MyLib.load(...)\n```",
+                    before="usage",  # appears before the XPMIR usage section
+                ),
+            ]
 
 These hooks are only called during Hub export (by ``ExperimaestroHFHub``),
 not during checkpoint saving. Then override

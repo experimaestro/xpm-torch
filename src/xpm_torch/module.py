@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 from typing import (
     List,
     Dict,
+    Optional,
 )
 from pathlib import Path
 import torch
@@ -113,12 +115,65 @@ class ModuleList(Module, Initializable):
         return torch.nn.Module.to(self, *args, **kwargs)
 
 
+@dataclass
+class ReadmeSection:
+    """A named section for the HF Hub README.
+
+    Sections are assembled in order, with optional ``before``/``after``
+    constraints for positioning relative to other sections.
+    """
+
+    key: str
+    """Unique identifier for this section."""
+
+    content: str
+    """Markdown content of this section."""
+
+    before: Optional[str] = None
+    """Insert this section before the section with this key."""
+
+    after: Optional[str] = None
+    """Insert this section after the section with this key."""
+
+
+def assemble_readme_sections(
+    base: List[ReadmeSection], extra: List[ReadmeSection]
+) -> str:
+    """Merge extra sections into base using before/after constraints,
+    then concatenate all contents."""
+    sections = list(base)
+    for s in extra:
+        if s.before:
+            idx = next(
+                (i for i, b in enumerate(sections) if b.key == s.before),
+                len(sections),
+            )
+            sections.insert(idx, s)
+        elif s.after:
+            idx = next(
+                (i for i, b in enumerate(sections) if b.key == s.after),
+                len(sections) - 1,
+            )
+            sections.insert(idx + 1, s)
+        else:
+            sections.append(s)
+    return "\n".join(s.content for s in sections)
+
+
 class ModuleLoader(PathSerializationLWTask):
     """Loads a model from a checkpoint directory.
 
-    Subclasses override :meth:`write_hub_extras` and :meth:`hub_readme_extra`
-    to customize what gets written when the model is exported to HuggingFace Hub.
+    Subclasses override :meth:`write_hub_extras` and
+    :meth:`hub_readme_sections` to customize what gets written when the
+    model is exported to HuggingFace Hub.
+
+    The model config is accessible via :attr:`model` (alias for ``value``).
     """
+
+    @property
+    def model(self):
+        """The model config (alias for ``value``)."""
+        return self.value
 
     def write_hub_extras(self, save_directory: Path):
         """Write additional files when exporting to HuggingFace Hub.
@@ -132,16 +187,17 @@ class ModuleLoader(PathSerializationLWTask):
         """
         pass
 
-    def hub_readme_extra(self) -> str:
-        """Return extra text to append to the HuggingFace Hub README.
+    def hub_readme_sections(self) -> List[ReadmeSection]:
+        """Return additional sections for the HF Hub README.
 
-        Override in subclasses to add model-specific documentation,
-        e.g. alternative loading instructions.
+        Each :class:`ReadmeSection` has a key and content, plus optional
+        ``before``/``after`` constraints for positioning relative to the
+        base sections (``frontmatter``, ``description``, ``usage``,
+        ``results``).
 
-        Returns:
-            A string (markdown) to append, or empty string.
+        Override in subclasses to provide model-specific content.
         """
-        return ""
+        return []
 
     def execute(self):
         """Loads the model from disk using the given serialization path"""
