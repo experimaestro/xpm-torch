@@ -31,6 +31,9 @@ docs = [
     "sphinx-rtd-theme>=3",
     "sphobjinv>=2.3",
 ]
+dev = [
+    "ruff>=0.15.7",
+]
 
 [build-system]
 requires = ["hatchling"]
