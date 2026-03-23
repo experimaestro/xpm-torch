@@ -100,6 +100,17 @@ class Module(Config, Initializable, nn.Module):
         """
         pass
 
+    def hub_readme_extra(self) -> str:
+        """Return extra text to append to the HuggingFace Hub README.
+
+        Override in subclasses to add model-specific documentation,
+        e.g. alternative loading instructions.
+
+        Returns:
+            A string (markdown) to append, or empty string.
+        """
+        return ""
+
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
 
