@@ -119,12 +119,13 @@ class ModuleLoader(PathSerializationLWTask):
         # First initialize model structure (empty init)
         self.value.initialize()
         # Then load weights: try model/ directory first, fall back to model.pth
-        logger.info("Loading model from disk: %s", self.path)
-        model_dir = self.path / "model"
+        path = Path(self.path)
+        logger.info("Loading model from disk: %s", path)
+        model_dir = path / "model"
         if model_dir.exists():
             self.value.load_model(model_dir)
         else:
-            data = torch.load(self.path / "model.pth", map_location="cpu", weights_only=True)
+            data = torch.load(path / "model.pth", map_location="cpu", weights_only=True)
             self.value.load_state_dict(data)
 
 
