@@ -48,6 +48,14 @@ Parameters
 
 .. autoxpmconfig:: xpm_torch.parameters.SubModuleLoader
 
+Hub Export Helpers
+------------------
+
+.. autoclass:: xpm_torch.module.ReadmeSection
+   :members:
+
+.. autofunction:: xpm_torch.module.assemble_readme_sections
+
 Results
 -------
 

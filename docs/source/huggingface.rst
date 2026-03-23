@@ -52,6 +52,8 @@ Saving locally first
 Loading a model from the Hub
 -----------------------------
 
+Low-level (experimaestro):
+
 .. code-block:: python
 
     from experimaestro.huggingface import ExperimaestroHFHub
@@ -59,11 +61,19 @@ Loading a model from the Hub
     # Returns a deserialized config (e.g. ModuleLoader)
     data = ExperimaestroHFHub.from_pretrained("your-org/model-name")
 
-    # Or load as a ready-to-use instance
-    data = ExperimaestroHFHub.from_pretrained(
-        "your-org/model-name",
-        as_instance=True,
-    )
+For xpmir models, use ``AutoModel`` which returns a
+:class:`~xpm_torch.module.ModuleLoader` directly:
+
+.. code-block:: python
+
+    from xpmir.models import AutoModel
+
+    # Returns a ModuleLoader — use as an init task in experiments
+    loader = AutoModel.load_from_hf_hub("your-org/model-name")
+    # loader.model is the model config
+
+    # Or load as a ready-to-use instance for direct inference
+    model = AutoModel.load_from_hf_hub("your-org/model-name", as_instance=True)
 
 Using the CLI
 -------------
