@@ -38,7 +38,6 @@ from xpm_torch.trainers.context import (
     TrainState,
     TrainerContext,
 )
-from xpm_torch.batchers import RecoverableOOMError
 from xpm_torch.trainers import Trainer
 
 import logging

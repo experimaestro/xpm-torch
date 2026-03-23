@@ -2,9 +2,8 @@
 
 import torch
 import torch.nn as nn
-from pathlib import Path
 from experimaestro import Param
-from xpm_torch.module import Module, ModuleLoader
+from xpm_torch.module import Module
 
 
 class SimpleModule(Module):

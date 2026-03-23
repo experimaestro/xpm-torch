@@ -2,8 +2,6 @@
 
 import torch
 import torch.nn as nn
-from pathlib import Path
-from unittest.mock import MagicMock
 from experimaestro import Param
 from xpm_torch.module import Module
 from xpm_torch.trainers.context import TrainState
