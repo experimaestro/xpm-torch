@@ -88,6 +88,18 @@ class Module(Config, Initializable, nn.Module):
         """
         return ModuleLoader.C(value=self, path=path)
 
+    def write_hub_extras(self, save_directory: Path):
+        """Write additional files when exporting to HuggingFace Hub.
+
+        Called by ``ExperimaestroHFHub._save_pretrained`` after the main
+        serialization. Override in subclasses to write format-specific
+        files (e.g. sentence-transformers configs).
+
+        Args:
+            save_directory: The Hub export directory.
+        """
+        pass
+
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
 
