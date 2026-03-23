@@ -7,6 +7,7 @@ from typing import Dict, Iterator, List, NamedTuple, Any, Optional
 from experimaestro import (
     Task,
     Config,
+    LightweightTask,
     Param,
     pathgenerator,
     Annotated,
@@ -59,11 +60,26 @@ class LearnerListenerStatus(Enum):
         return LearnerListenerStatus(max(self.value, other.value))
 
 
-class CheckpointModuleLoader(ModuleLoader):
-    """Useful to load a specific checkpoint"""
+class CheckpointModuleLoader(LightweightTask):
+    """Wrapper around a ModuleLoader for a specific checkpoint.
+
+    Holds epoch metadata and delegates loading to the inner loader
+    (produced by ``Module.loader_config``).
+    """
+
+    loader: Param[ModuleLoader]
+    """The actual loader (from loader_config)"""
 
     epoch: Param[Optional[int]] = field(default=None, ignore_default=True)
     """The epoch of the checkpoint"""
+
+    @property
+    def value(self):
+        """The model config (delegates to the inner loader)."""
+        return self.loader.value
+
+    def execute(self):
+        self.loader.execute()
 
 
 class LearnerListener(Config):
@@ -159,7 +175,7 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
     
-    fabric_config: Param[FabricConfiguration] = field(default=FabricConfiguration.C())
+    fabric_config: Param[FabricConfiguration] = field(default_factory=FabricConfiguration.C)
     """Runtime configuration, managed by Fabric"""
 
 
@@ -178,19 +194,16 @@ class Learner(Task, EasyLogger):
                 for listener in self.listeners
             },
             learned_model=dep(
-                CheckpointModuleLoader.C(
-                    value=self.model,
-                    path=self.last_checkpoint_path / TrainState.MODEL_PATH,
-                )
+                self.model.loader_config(self.last_checkpoint_path)
             ),
             checkpoints={
                 interval: dep(
                     CheckpointModuleLoader.C(
-                        value=self.model,
-                        path=TrainerContext.get_checkpoint_path(
-                            self.checkpointspath, interval
-                        )
-                        / TrainState.MODEL_PATH,
+                        loader=self.model.loader_config(
+                            TrainerContext.get_checkpoint_path(
+                                self.checkpointspath, interval
+                            )
+                        ),
                         epoch=interval,
                     )
                 )
@@ -203,10 +216,10 @@ class Learner(Task, EasyLogger):
         return self.checkpointspath / "last"
 
     def execute(self):
-        """ Main Training loop, executed using the fabric context.
-        the training process is stopped either by 
-         - the listeners 
-         - max_epoch reached
+        """Main training loop, executed using the fabric context.
+
+        The training process is stopped either by the listeners
+        or when max_epoch is reached.
         """        
 
         # 1. Launch Fabric

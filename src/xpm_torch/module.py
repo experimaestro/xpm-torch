@@ -75,6 +75,19 @@ class Module(Config, Initializable, nn.Module):
 
         self.load_state_dict(load_file(str(path / "model.safetensors")))
 
+    def loader_config(self, path: Path) -> "ModuleLoader":
+        """Returns a ModuleLoader config that knows how to load this model from path.
+
+        The loader handles DataPath fields internally. For a simple Module,
+        this is a single DataPath to the model/ directory. Subclasses like
+        DotDense override to return custom loaders with multiple DataPaths
+        (one per sub-encoder).
+
+        Args:
+            path: The base checkpoint path containing the model/ directory.
+        """
+        return ModuleLoader.C(value=self, path=path)
+
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
 
@@ -116,21 +129,19 @@ class ModuleLoader(PathSerializationLWTask):
 
 
 class ModuleContainer(nn.Module):
-    """
-    A config that can contain Modules, 
-    exposing only nn.Module attributes if they actually contain state (parameters or buffers).
-    ```py
-    # example implementation
-    class MyRetriever(ModuleContainer):
-        def __init__(self):
-            super().__init__()
-            self.encoder = nn.Linear(128, 64) # Has params -> Will be wrapped
-            self.activ = nn.ReLU()            # No params -> Will be ignored by fabric.setup
+    """A container for Modules, exposing only nn.Module attributes
+    that actually contain state (parameters or buffers).
 
-    # Usage
-    retriever = MyRetriever()
-    retriever.setup_with_fabric(fabric)
-    ```
+    Example::
+
+        class MyRetriever(ModuleContainer):
+            def __init__(self):
+                super().__init__()
+                self.encoder = nn.Linear(128, 64)  # Has params -> wrapped
+                self.activ = nn.ReLU()              # No params -> ignored
+
+        retriever = MyRetriever()
+        retriever.setup_with_fabric(fabric)
     """
 
     def __init__(self):

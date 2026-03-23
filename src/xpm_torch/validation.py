@@ -1,5 +1,6 @@
 import logging
 from experimaestro import (
+    LightweightTask,
     Param,
     field,
 )
@@ -10,8 +11,15 @@ from xpm_torch.learner import LearnerListener
 logger = logging.getLogger(__name__)
 
 
-class ValidationModuleLoader(ModuleLoader):
-    """Specializes the validation listener"""
+class ValidationModuleLoader(LightweightTask):
+    """Wrapper around a ModuleLoader for validation checkpoints.
+
+    Holds validation metadata (listener, key) and delegates loading
+    to the inner loader (produced by ``Module.loader_config``).
+    """
+
+    loader: Param[ModuleLoader]
+    """The actual loader (from loader_config)"""
 
     listener: Param["LearnerListener"] = field(ignore_generated=True)
     """The listener (kept there to change the validation loader identifier based
@@ -20,7 +28,10 @@ class ValidationModuleLoader(ModuleLoader):
     key: Param[str]
     """The key for this listener"""
 
-# TODO - need to decide how to deal with this - xpmir.letor.learner ..
+    @property
+    def value(self):
+        """The model config (delegates to the inner loader)."""
+        return self.loader.value
 
-# class ValidationListener(LearnerListener):
-#     """Learning validation early-stopping
+    def execute(self):
+        self.loader.execute()
