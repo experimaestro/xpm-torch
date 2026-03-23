@@ -92,7 +92,7 @@ class TrainerValidationLoss(LearnerListener):
 
         return LearnerListenerStatus.DONT_STOP
 
-    def reducer(self, records: Records, metrics: Metrics):
+    def reducer(self, records, metrics: Metrics):
         """Combines a forward and backard
 
         This method can be implemented by specific trainers that use the gradient.

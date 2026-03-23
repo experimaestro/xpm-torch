@@ -1,11 +1,10 @@
 import logging
+from typing import Callable, DefaultDict, List, Type, TypeVar
+
+from experimaestro import Config
 
 logger = logging.getLogger("xpm_torch.context")
 logger.setLevel(logging.INFO)
-
-
-from typing import Callable, DefaultDict, List, Type, TypeVar
-from experimaestro import Config
 
 
 class Hook(Config):
@@ -27,7 +26,8 @@ class InitializationHook(Hook):
     def before(self, context: "Context"):
         """Called before initialization"""
         pass
-    
+
+
 class Context:
     """Generic computational context"""
 
@@ -50,4 +50,3 @@ class Context:
     def add_hook(self, hook):
         for cls in hook.__class__.__mro__:
             self.hooksmap[cls].append(hook)
-

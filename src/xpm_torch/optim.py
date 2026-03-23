@@ -23,7 +23,7 @@ from xpm_torch.context import Hook, Context
 from xpm_torch.utils.utils import foreach
 from xpm_torch.metrics import ScalarMetric
 from .schedulers import Scheduler
-from .module import Module, ModuleLoader
+from .module import Module, ModuleLoader as ModuleLoader
 
 if TYPE_CHECKING:
     from xpm_torch.trainers import TrainerContext
