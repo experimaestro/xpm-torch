@@ -88,29 +88,6 @@ class Module(Config, Initializable, nn.Module):
         """
         return ModuleLoader.C(value=self, path=path)
 
-    def write_hub_extras(self, save_directory: Path):
-        """Write additional files when exporting to HuggingFace Hub.
-
-        Called by ``ExperimaestroHFHub._save_pretrained`` after the main
-        serialization. Override in subclasses to write format-specific
-        files (e.g. sentence-transformers configs).
-
-        Args:
-            save_directory: The Hub export directory.
-        """
-        pass
-
-    def hub_readme_extra(self) -> str:
-        """Return extra text to append to the HuggingFace Hub README.
-
-        Override in subclasses to add model-specific documentation,
-        e.g. alternative loading instructions.
-
-        Returns:
-            A string (markdown) to append, or empty string.
-        """
-        return ""
-
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
 
@@ -137,6 +114,35 @@ class ModuleList(Module, Initializable):
 
 
 class ModuleLoader(PathSerializationLWTask):
+    """Loads a model from a checkpoint directory.
+
+    Subclasses override :meth:`write_hub_extras` and :meth:`hub_readme_extra`
+    to customize what gets written when the model is exported to HuggingFace Hub.
+    """
+
+    def write_hub_extras(self, save_directory: Path):
+        """Write additional files when exporting to HuggingFace Hub.
+
+        Called by ``ExperimaestroHFHub._save_pretrained`` after the main
+        serialization. Override in subclasses to write format-specific
+        files (e.g. sentence-transformers configs).
+
+        Args:
+            save_directory: The Hub export directory.
+        """
+        pass
+
+    def hub_readme_extra(self) -> str:
+        """Return extra text to append to the HuggingFace Hub README.
+
+        Override in subclasses to add model-specific documentation,
+        e.g. alternative loading instructions.
+
+        Returns:
+            A string (markdown) to append, or empty string.
+        """
+        return ""
+
     def execute(self):
         """Loads the model from disk using the given serialization path"""
         # First initialize model structure (empty init)

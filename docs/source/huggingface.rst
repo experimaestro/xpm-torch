@@ -100,18 +100,28 @@ The CLI deserializes this config, lets you pick a model key from
 Customizing the HF checkpoint format
 -------------------------------------
 
+There are three extension points for customizing what gets written during
+Hub export. They live on different classes:
+
+- :meth:`Module.loader_config(path) <xpm_torch.module.Module.loader_config>` —
+  on the model, controls which ``ModuleLoader`` subclass is returned
+- :meth:`ModuleLoader.write_hub_extras(save_directory) <xpm_torch.module.ModuleLoader.write_hub_extras>` —
+  on the loader, writes additional files (e.g. ST configs)
+- :meth:`ModuleLoader.hub_readme_extra() <xpm_torch.module.ModuleLoader.hub_readme_extra>` —
+  on the loader, appends model-specific text to the README
+
+The hooks are on :class:`~xpm_torch.module.ModuleLoader` (not on
+:class:`~xpm_torch.module.Module`) because the loader is the object that
+gets serialized for Hub export and holds the path to the model weights.
+``Module`` configs are data-less.
+
 :meth:`~xpm_torch.module.Module.loader_config`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When a model is serialized for the Hub, experimaestro serializes the
 :class:`~xpm_torch.module.ModuleLoader` returned by
 :meth:`~xpm_torch.module.Module.loader_config`. Subclasses override this
-method to control:
-
-- **Which loader class** is used (and therefore what ``__xpm_serialize__``
-  does)
-- **How model weights are organized** (e.g. separate subdirectories
-  for each sub-encoder)
+method to return a custom loader:
 
 .. code-block:: python
 
@@ -122,11 +132,17 @@ method to control:
             # Default: single ModuleLoader pointing to checkpoint dir
             return ModuleLoader.C(value=self, path=path)
 
+    class MySpladeModel(Module):
+        def loader_config(self, path):
+            # Return a custom loader that writes ST configs on Hub export
+            return SpladeModuleLoader.C(value=self, path=path)
+
 :meth:`~xpm_torch.module.Module.save_model` / :meth:`~xpm_torch.module.Module.load_model`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-These methods control how model weights are written to and read from
-a directory. Override them to change the on-disk format:
+These methods on :class:`~xpm_torch.module.Module` control how model
+weights are written to and read from a directory. Override them to change
+the on-disk format:
 
 .. code-block:: python
 
@@ -145,31 +161,29 @@ a directory. Override them to change the on-disk format:
             if (path / "query_encoder").exists():
                 self.query_encoder.load_model(path / "query_encoder")
 
-``__xpm_serialize__`` on custom loaders
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` / :meth:`~xpm_torch.module.ModuleLoader.hub_readme_extra`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For advanced customization — such as writing additional config files
-alongside the model weights (e.g. sentence-transformers compatibility
-files) — create a custom :class:`~xpm_torch.module.ModuleLoader` subclass
-and override ``__xpm_serialize__``:
+To write additional files alongside the model weights during Hub export
+(e.g. sentence-transformers compatibility configs), create a custom
+:class:`~xpm_torch.module.ModuleLoader` subclass and override
+:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras`:
 
 .. code-block:: python
 
     from xpm_torch.module import ModuleLoader
 
     class MyCustomLoader(ModuleLoader):
-        def __xpm_serialize__(self, context):
-            # First, do the normal serialization (writes model weights)
-            result = super().__xpm_serialize__(context)
+        def write_hub_extras(self, save_directory):
+            (save_directory / "my_config.json").write_text('{"format": "custom"}')
 
-            # Then write additional files to the save directory
-            save_dir = context.save_directory
-            (save_dir / "my_config.json").write_text('{"format": "custom"}')
+        def hub_readme_extra(self) -> str:
+            return "\n## Custom loading\n\nUse `MyLibrary.load(...)` to load.\n"
 
-            return result
-
-Then override :meth:`~xpm_torch.module.Module.loader_config` on your model
-to return this loader:
+These hooks are only called during Hub export (by ``ExperimaestroHFHub``),
+not during checkpoint saving. Then override
+:meth:`~xpm_torch.module.Module.loader_config` on your model to return
+this loader:
 
 .. code-block:: python
 

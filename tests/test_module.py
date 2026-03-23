@@ -55,8 +55,8 @@ def test_loader_config(tmp_path):
     model_dir = checkpoint_path / "model"
     model.save_model(model_dir)
 
-    # Get loader config and execute it
-    loader_cfg = model.loader_config(checkpoint_path)
+    # Get loader config and execute it (loader_config is called on the config)
+    loader_cfg = cfg.loader_config(checkpoint_path)
     loader = loader_cfg.instance()
     loader.execute()
 

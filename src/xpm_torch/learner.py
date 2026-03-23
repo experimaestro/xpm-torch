@@ -63,8 +63,8 @@ class LearnerListenerStatus(Enum):
 class CheckpointModuleLoader(LightweightTask):
     """Wrapper around a ModuleLoader for a specific checkpoint.
 
-    Holds epoch metadata and delegates loading to the inner loader
-    (produced by ``Module.loader_config``).
+    Holds epoch metadata and delegates loading and Hub export hooks
+    to the inner loader (produced by ``Module.loader_config``).
     """
 
     loader: Param[ModuleLoader]
@@ -80,6 +80,12 @@ class CheckpointModuleLoader(LightweightTask):
 
     def execute(self):
         self.loader.execute()
+
+    def write_hub_extras(self, save_directory):
+        self.loader.write_hub_extras(save_directory)
+
+    def hub_readme_extra(self) -> str:
+        return self.loader.hub_readme_extra()
 
 
 class LearnerListener(Config):
