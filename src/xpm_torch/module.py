@@ -10,8 +10,9 @@ import logging
 import torch.nn as nn
 from experimaestro import (
     Config,
-    PathSerializationLWTask,
+    DataPath,
     Param,
+    SerializationLWTask,
 )
 from xpm_torch.utils.utils import Initializable
 
@@ -67,7 +68,6 @@ class Module(Config, Initializable, nn.Module):
     def save_model(self, path: Path):
         """Save model parameters to a directory using safetensors."""
         from safetensors.torch import save_file
-
         path.mkdir(parents=True, exist_ok=True)
         save_file(self.state_dict(), str(path / "model.safetensors"))
 
@@ -80,15 +80,14 @@ class Module(Config, Initializable, nn.Module):
     def loader_config(self, path: Path) -> "ModuleLoader":
         """Returns a ModuleLoader config that knows how to load this model from path.
 
-        The loader handles DataPath fields internally. For a simple Module,
-        this is a single DataPath to the model/ directory. Subclasses like
-        DotDense override to return custom loaders with multiple DataPaths
-        (one per sub-encoder).
+        The default returns a :class:`SimpleModuleLoader` with a single
+        ``path`` DataPath. Subclasses override to return loaders with
+        different DataPath layouts (e.g. separate encoder paths).
 
         Args:
             path: The base checkpoint path containing the model/ directory.
         """
-        return ModuleLoader.C(value=self, path=path)
+        return SimpleModuleLoader.C(value=self, path=path)
 
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
@@ -160,12 +159,16 @@ def assemble_readme_sections(
     return "\n".join(s.content for s in sections)
 
 
-class ModuleLoader(PathSerializationLWTask):
-    """Loads a model from a checkpoint directory.
+class ModuleLoader(SerializationLWTask):
+    """Base class for loading a model from a checkpoint.
 
-    Subclasses override :meth:`write_hub_extras` and
-    :meth:`hub_readme_sections` to customize what gets written when the
-    model is exported to HuggingFace Hub.
+    Subclasses define their own ``DataPath`` fields to specify where model
+    files are stored (e.g. a single ``path`` or separate ``encoder_path``
+    and ``query_encoder_path``).
+
+    Override :meth:`write_hub_extras` and :meth:`hub_readme_sections` to
+    customize what gets written when the model is exported to HuggingFace
+    Hub.
 
     The model config is accessible via :attr:`model` (alias for ``value``).
     """
@@ -200,18 +203,25 @@ class ModuleLoader(PathSerializationLWTask):
         return []
 
     def execute(self):
+        raise NotImplementedError("Subclasses must implement execute()")
+
+
+class SimpleModuleLoader(ModuleLoader):
+    """Default ModuleLoader with a single ``path`` DataPath.
+
+    Loads model weights from a checkpoint directory containing either
+    a ``model/`` subdirectory (safetensors) or a ``model.pth`` file.
+    """
+
+    path: DataPath
+    """Path to the checkpoint directory"""
+
+    def execute(self):
         """Loads the model from disk using the given serialization path"""
-        # First initialize model structure (empty init)
         self.value.initialize()
-        # Then load weights: try model/ directory first, fall back to model.pth
         path = Path(self.path)
         logger.info("Loading model from disk: %s", path)
-        model_dir = path / "model"
-        if model_dir.exists():
-            self.value.load_model(model_dir)
-        else:
-            data = torch.load(path / "model.pth", map_location="cpu", weights_only=True)
-            self.value.load_state_dict(data)
+        self.value.load_model(path)
 
 
 class ModuleContainer(nn.Module):

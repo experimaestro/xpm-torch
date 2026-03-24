@@ -48,14 +48,12 @@ def test_loader_config(tmp_path):
     model = cfg.instance()
     model.initialize()
 
-    # Save checkpoint (mimicking TrainState.save)
-    checkpoint_path = tmp_path / "checkpoint"
-    checkpoint_path.mkdir()
-    model_dir = checkpoint_path / "model"
+    # Save model (mimicking TrainState.save which creates model/ subdir)
+    model_dir = tmp_path / "checkpoint" / "model"
     model.save_model(model_dir)
 
-    # Get loader config and execute it (loader_config is called on the config)
-    loader_cfg = cfg.loader_config(checkpoint_path)
+    # loader_config receives the model dir directly
+    loader_cfg = cfg.loader_config(model_dir)
     loader = loader_cfg.instance()
     loader.execute()
 

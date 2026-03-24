@@ -199,7 +199,9 @@ class Learner(Task, EasyLogger):
                 for listener in self.listeners
             },
             learned_model=dep(
-                self.model.loader_config(self.last_checkpoint_path)
+                self.model.loader_config(
+                    self.last_checkpoint_path / TrainState.MODEL_DIR
+                )
             ),
             checkpoints={
                 interval: dep(
@@ -208,6 +210,7 @@ class Learner(Task, EasyLogger):
                             TrainerContext.get_checkpoint_path(
                                 self.checkpointspath, interval
                             )
+                            / TrainState.MODEL_DIR
                         ),
                         epoch=interval,
                     )

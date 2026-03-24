@@ -52,7 +52,7 @@ def upload_hfhub(
     Reads TrainingResults from the experiment's saved data.
     Interactive prompts fill in any missing options.
     """
-    from experimaestro.huggingface import ExperimaestroHFHub
+    from xpm_torch.huggingface import TorchHFHub
     from experimaestro.settings import find_workspace, get_settings
 
     # Workspace selection
@@ -104,11 +104,9 @@ def upload_hfhub(
             "Make sure the experiment saved TrainingResults."
         )
 
-    from experimaestro.core.objects import ConfigInformation
+    from experimaestro import load
 
-    results = ConfigInformation.deserialize(
-        lambda p: results_path / p, as_instance=True
-    )
+    results = load(results_path)
 
     # Model selection
     if model_key is None:
@@ -129,7 +127,7 @@ def upload_hfhub(
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
         click.echo(f"Saving {key} to {save_dir}")
-        ExperimaestroHFHub(model).save_pretrained(save_dir)
+        TorchHFHub(model).save_pretrained(save_dir)
 
     # Upload to HF Hub
     if repo_id is None and not save_dir:
@@ -139,6 +137,6 @@ def upload_hfhub(
 
     if repo_id:
         click.echo(f"Uploading {key} to {repo_id} (private={private})")
-        ExperimaestroHFHub(model).push_to_hub(repo_id=repo_id, private=private)
+        TorchHFHub(model).push_to_hub(repo_id=repo_id, private=private)
     elif not save_dir:
         click.echo("Nothing to do (no --save-dir or HF Hub upload).")

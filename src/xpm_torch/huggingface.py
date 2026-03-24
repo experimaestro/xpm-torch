@@ -1,17 +1,21 @@
-"""HuggingFace Hub utility functions for xpm-torch.
+"""HuggingFace Hub integration for xpm-torch.
 
-Provides helpers for checking cache, downloading models, and reading configs
-from HuggingFace Hub without importing the full transformers library.
+Provides :class:`TorchHFHub` for exporting ModuleLoaders to the Hub
+(calls ``write_hub_extras`` and ``hub_readme_sections``), plus utility
+functions for cache checking and downloading.
 """
 
 import json
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
+from experimaestro.huggingface import ExperimaestroHFHub
 from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
+
+from xpm_torch.module import assemble_readme_sections
 
 logger = logging.getLogger(__name__)
 
@@ -164,3 +168,35 @@ def download_huggingface_model(
             e,
         )
         raise
+
+
+class TorchHFHub(ExperimaestroHFHub):
+    """HF Hub integration for xpm-torch ModuleLoaders.
+
+    Extends :class:`~experimaestro.huggingface.ExperimaestroHFHub` to call
+    :meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` after
+    serialization and build the README from
+    :meth:`~xpm_torch.module.ModuleLoader.hub_readme_sections`.
+
+    Subclass this (e.g. ``XPMIRHFHub``) to add library-specific README
+    sections, TensorBoard logs, etc.
+    """
+
+    def _save_pretrained(self, save_directory: Union[str, Path]):
+        save_directory = Path(save_directory)
+        super()._save_pretrained(save_directory)
+
+        # Call ModuleLoader hub hooks
+        self.config.write_hub_extras(save_directory)
+
+        # Build README from loader sections
+        loader_sections = self.config.hub_readme_sections()
+        base_sections = self._readme_base_sections()
+        if base_sections or loader_sections:
+            readme = assemble_readme_sections(base_sections, loader_sections)
+            (save_directory / "README.md").write_text(readme)
+
+    def _readme_base_sections(self):
+        """Return base README sections. Override in subclasses to add
+        library-specific content (description, usage examples, results)."""
+        return []

@@ -2,52 +2,45 @@ HuggingFace Hub Integration
 ===========================
 
 xpm-torch models can be pushed to and loaded from the
-`HuggingFace Hub <https://huggingface.co/>`_ via experimaestro's
-``ExperimaestroHFHub`` class. The serialization system preserves the full
-experimaestro configuration graph, so a downloaded model can be used
-directly in further experiments.
+`HuggingFace Hub <https://huggingface.co/>`_ via
+:class:`~xpm_torch.huggingface.TorchHFHub` (which extends experimaestro's
+``ExperimaestroHFHub``). The serialization preserves the full experimaestro
+configuration graph, so a downloaded model can be used directly in further
+experiments.
 
 Pushing a model to the Hub
 --------------------------
 
-After training, use ``ExperimaestroHFHub`` to upload a model config
-(typically a :class:`~xpm_torch.module.ModuleLoader` or the model config
-itself):
+After training, use :class:`~xpm_torch.huggingface.TorchHFHub` to upload a
+:class:`~xpm_torch.module.ModuleLoader`:
 
 .. code-block:: python
 
-    from experimaestro.huggingface import ExperimaestroHFHub
+    from xpm_torch.huggingface import TorchHFHub
 
-    # Push a model config (e.g. a trained scorer)
-    ExperimaestroHFHub(model_config).push_to_hub("your-org/model-name")
+    # Push a ModuleLoader (from loader_config or validation output)
+    TorchHFHub(loader).push_to_hub("your-org/model-name")
 
-    # With a private repo
-    ExperimaestroHFHub(model_config).push_to_hub(
-        "your-org/model-name",
-        private=True,
-    )
+    # Or save locally first
+    TorchHFHub(loader).save_pretrained("/path/to/save")
+
+:class:`~xpm_torch.huggingface.TorchHFHub` calls
+:meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` and
+:meth:`~xpm_torch.module.ModuleLoader.hub_readme_sections` on the loader,
+so format-specific files (e.g. sentence-transformers configs) and README
+sections are generated automatically.
 
 What gets uploaded
 ~~~~~~~~~~~~~~~~~~
 
-``ExperimaestroHFHub`` serializes the full experimaestro config tree.
-For a :class:`~xpm_torch.module.ModuleLoader` (produced by
-:meth:`~xpm_torch.module.Module.loader_config`), this includes:
+The serialized directory contains:
 
-- ``experimaestro.json`` — the config definition
-- ``model/`` — directory containing model weights (safetensors via
-  :meth:`~xpm_torch.module.Module.save_model`)
-
-  - For dual-encoder models, this contains ``encoder/`` and optionally
-    ``query_encoder/`` subdirectories
-
-Saving locally first
-~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-    # Save to a local directory (same format as Hub upload)
-    ExperimaestroHFHub(model_config).save_pretrained("/path/to/save")
+- ``experimaestro.json`` — the config definition (for reloading with xpmir)
+- Model weight directories — named after the loader's ``DataPath`` fields
+  (or customized via ``__xpm_serialize__``)
+- Format-specific configs written by ``write_hub_extras`` (e.g.
+  ``modules.json``, ``router_config.json`` for sentence-transformers)
+- ``README.md`` — assembled from base + loader sections
 
 Loading a model from the Hub
 -----------------------------
@@ -104,26 +97,25 @@ serialized config under
 
 The CLI deserializes this config, lets you pick a model key from
 :attr:`~xpm_torch.results.TrainingResults.models`, and then calls
-``ExperimaestroHFHub(model).push_to_hub(...)`` (or
-``save_pretrained(...)`` for local export).
+:class:`~xpm_torch.huggingface.TorchHFHub` to export.
 
 Customizing the HF checkpoint format
 -------------------------------------
 
 There are three extension points for customizing what gets written during
-Hub export. They live on different classes:
+Hub export:
 
 - :meth:`Module.loader_config(path) <xpm_torch.module.Module.loader_config>` —
   on the model, controls which ``ModuleLoader`` subclass is returned
 - :meth:`ModuleLoader.write_hub_extras(save_directory) <xpm_torch.module.ModuleLoader.write_hub_extras>` —
   on the loader, writes additional files (e.g. ST configs)
-- :meth:`ModuleLoader.hub_readme_extra() <xpm_torch.module.ModuleLoader.hub_readme_extra>` —
-  on the loader, appends model-specific text to the README
+- :meth:`ModuleLoader.hub_readme_sections() <xpm_torch.module.ModuleLoader.hub_readme_sections>` —
+  on the loader, provides named README sections with positioning
 
 The hooks are on :class:`~xpm_torch.module.ModuleLoader` (not on
 :class:`~xpm_torch.module.Module`) because the loader is the object that
-gets serialized for Hub export and holds the path to the model weights.
-``Module`` configs are data-less.
+gets serialized for Hub export and holds the ``DataPath`` references to
+model weights. ``Module`` configs are data-less.
 
 :meth:`~xpm_torch.module.Module.loader_config`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -131,21 +123,20 @@ gets serialized for Hub export and holds the path to the model weights.
 When a model is serialized for the Hub, experimaestro serializes the
 :class:`~xpm_torch.module.ModuleLoader` returned by
 :meth:`~xpm_torch.module.Module.loader_config`. Subclasses override this
-method to return a custom loader:
+method to return a custom loader with different ``DataPath`` fields:
 
 .. code-block:: python
 
-    from xpm_torch.module import Module, ModuleLoader
+    from xpm_torch.module import Module, SimpleModuleLoader
 
     class MyModel(Module):
         def loader_config(self, path):
-            # Default: single ModuleLoader pointing to checkpoint dir
-            return ModuleLoader.C(value=self, path=path)
+            # Default: single path DataPath
+            return SimpleModuleLoader.C(value=self, path=path)
 
-    class MySpladeModel(Module):
-        def loader_config(self, path):
-            # Return a custom loader that writes ST configs on Hub export
-            return SpladeModuleLoader.C(value=self, path=path)
+Loaders can also override ``__xpm_serialize__`` to control the directory
+names used during serialization (e.g. mapping field names to
+sentence-transformers conventions).
 
 :meth:`~xpm_torch.module.Module.save_model` / :meth:`~xpm_torch.module.Module.load_model`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -172,7 +163,7 @@ the on-disk format:
                 self.query_encoder.load_model(path / "query_encoder")
 
 :meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` and :meth:`~xpm_torch.module.ModuleLoader.hub_readme_sections`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To write additional files alongside the model weights during Hub export
 (e.g. sentence-transformers compatibility configs), create a custom
@@ -203,10 +194,10 @@ positioning relative to the base sections (``frontmatter``,
                 ),
             ]
 
-These hooks are only called during Hub export (by ``ExperimaestroHFHub``),
-not during checkpoint saving. Then override
-:meth:`~xpm_torch.module.Module.loader_config` on your model to return
-this loader:
+These hooks are only called during Hub export (by
+:class:`~xpm_torch.huggingface.TorchHFHub`), not during checkpoint saving.
+Then override :meth:`~xpm_torch.module.Module.loader_config` on your model
+to return this loader:
 
 .. code-block:: python
 
@@ -214,25 +205,15 @@ this loader:
         def loader_config(self, path):
             return MyCustomLoader.C(value=self, path=path)
 
-Subclassing ``ExperimaestroHFHub``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Class hierarchy
+~~~~~~~~~~~~~~~
 
-For library-level customization (e.g. adding a README or TensorBoard
-logs to every upload), subclass ``ExperimaestroHFHub``:
-
-.. code-block:: python
-
-    from experimaestro.huggingface import ExperimaestroHFHub
-
-    class MyLibraryHFHub(ExperimaestroHFHub):
-        def __init__(self, config, variant=None, readme=None):
-            super().__init__(config, variant)
-            self.readme = readme
-
-        def _save_pretrained(self, save_directory):
-            super()._save_pretrained(save_directory)
-            if self.readme:
-                (save_directory / "README.md").write_text(self.readme)
+- :class:`~experimaestro.huggingface.ExperimaestroHFHub` — base serialization
+  (experimaestro)
+- :class:`~xpm_torch.huggingface.TorchHFHub` — calls ``write_hub_extras``
+  and ``hub_readme_sections`` on the loader (xpm-torch)
+- ``XPMIRHFHub`` — adds xpmir README sections (frontmatter, usage, results)
+  and TensorBoard logs (xpmir)
 
 Utility functions
 -----------------
@@ -242,3 +223,4 @@ downloads, config retrieval):
 
 .. automodule:: xpm_torch.huggingface
    :members:
+   :exclude-members: TorchHFHub

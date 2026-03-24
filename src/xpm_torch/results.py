@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import Dict, Optional
 
-from experimaestro import Config, Param
+from experimaestro import Config, Meta, Param
+from xpm_torch.module import ModuleLoader
 
 
 class TrainingResults(Config):
@@ -11,10 +12,13 @@ class TrainingResults(Config):
 
     Subclass this in domain-specific libraries (e.g., xpmir's PaperResults)
     to add evaluation results and other metadata.
+
+    Models should be :class:`~xpm_torch.module.ModuleLoader` instances
+    (not wrappers like ValidationModuleLoader).
     """
 
-    models: Param[Dict[str, Config]]
-    """Model configs keyed by identifier"""
+    models: Param[Dict[str, ModuleLoader]]
+    """ModuleLoaders keyed by identifier"""
 
-    tb_logs: Param[Optional[Dict[str, Path]]]
-    """Tensorboard log dirs per model"""
+    tb_logs: Meta[Optional[Dict[str, Path]]]
+    """Tensorboard log dirs per model (metadata, not part of identity)"""
