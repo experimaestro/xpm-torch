@@ -90,6 +90,20 @@ Configurable optimizers and schedulers:
 
 See :doc:`optimization` for the full API reference.
 
+Export actions
+~~~~~~~~~~~~~~
+
+After training, models can be exported to HuggingFace Hub or a local directory
+via experimaestro's action system. The :class:`~xpm_torch.learner.Learner`
+automatically registers :class:`~xpm_torch.actions.ExportAction` instances
+during submission, which can be executed interactively after the experiment
+completes. Subclass :class:`~xpm_torch.actions.ExportAction` and override
+:meth:`~xpm_torch.module.Module.export_action` to customize the export
+behavior for your models.
+
+See :doc:`huggingface` for details on actions, pushing models, and customizing
+the checkpoint format.
+
 HuggingFace Hub
 ~~~~~~~~~~~~~~~
 
@@ -97,22 +111,12 @@ Utility functions for cache checking and downloading from HuggingFace Hub.
 Model upload/download is handled by ``ExperimaestroHFHub`` (from the
 experimaestro package).
 
-See :doc:`huggingface` for details on pushing models, customizing checkpoint
-format, and using the CLI.
-
 Experiment results
 ~~~~~~~~~~~~~~~~~~
 
 - :class:`~xpm_torch.results.TrainingResults` — A serializable ``Config``
   holding trained model configs and TensorBoard log paths. Saved by experiments
-  for later retrieval by the CLI.
-
-CLI
-~~~
-
-The ``xpm-torch upload-hfhub`` command exports trained models from an
-experimaestro workspace to a local directory or HuggingFace Hub.
-Supports interactive workspace/experiment/model selection.
+  for later retrieval.
 
 Batching
 ~~~~~~~~
@@ -136,13 +140,14 @@ How it fits together
 
     YAML config
       → experimaestro deserializes Config objects
-        → Learner task is submitted
+        → Learner task is submitted (ExportActions registered)
           → Fabric launches training
             → Trainer produces batches, Module computes forward/backward
               → TrainerContext collects losses and metrics
                 → LearnerListeners validate and checkpoint
                   → ModuleLoader configs point to best checkpoints
-                    → ExperimaestroHFHub serializes for Hub upload
+      → After completion, ExportActions execute interactively
+          → TorchHFHub serializes for Hub upload or local save
 
 Related packages
 ----------------

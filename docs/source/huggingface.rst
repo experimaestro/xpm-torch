@@ -8,11 +8,69 @@ xpm-torch models can be pushed to and loaded from the
 configuration graph, so a downloaded model can be used directly in further
 experiments.
 
-Pushing a model to the Hub
---------------------------
+Exporting models via actions
+----------------------------
 
-After training, use :class:`~xpm_torch.huggingface.TorchHFHub` to upload a
-:class:`~xpm_torch.module.ModuleLoader`:
+The recommended way to export trained models is through experimaestro's
+**action system**. When a :class:`~xpm_torch.learner.Learner` is submitted,
+it automatically registers :class:`~xpm_torch.actions.ExportAction` instances
+for the last checkpoint and for each listener's best checkpoint. After the
+experiment completes, these actions can be executed interactively via the
+experimaestro CLI (``experimaestro run-experiment … --run-actions``).
+
+:class:`~xpm_torch.actions.ExportAction` prompts the user to choose between
+uploading to HuggingFace Hub or saving to a local directory, then delegates
+to :class:`~xpm_torch.huggingface.TorchHFHub`.
+
+How actions are registered
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Actions are registered during task submission via the ``add_action`` callback
+provided by experimaestro:
+
+.. code-block:: python
+
+    class Learner(Task):
+        def __submit__(self, dep, add_action):
+            loader = dep(self.model.loader_config(...))
+            # Register export action for the last checkpoint
+            add_action(self.model.export_action(loader, default_name="last"))
+            ...
+
+:meth:`Module.export_action(loader, **kwargs) <xpm_torch.module.Module.export_action>`
+returns an :class:`~xpm_torch.actions.ExportAction` config by default.
+Subclasses override this method to return library-specific actions (e.g.
+``XPMIRExportAction`` adds xpmir README sections and metadata).
+
+Customizing the export action
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To customize what happens during export, subclass
+:class:`~xpm_torch.actions.ExportAction` and override
+:meth:`~xpm_torch.actions.ExportAction.get_hub` to return a
+library-specific hub wrapper:
+
+.. code-block:: python
+
+    from xpm_torch.actions import ExportAction
+
+    class MyExportAction(ExportAction):
+        def get_hub(self):
+            return MyCustomHFHub(self.loader)
+
+Then override :meth:`~xpm_torch.module.Module.export_action` on your model
+to return this action:
+
+.. code-block:: python
+
+    class MyModel(Module):
+        def export_action(self, loader, **kwargs):
+            return MyExportAction.C(loader=loader, **kwargs)
+
+Direct API usage
+~~~~~~~~~~~~~~~~
+
+You can also use :class:`~xpm_torch.huggingface.TorchHFHub` directly:
 
 .. code-block:: python
 
@@ -67,37 +125,6 @@ For xpmir models, use ``AutoModel`` which returns a
 
     # Or load as a ready-to-use instance for direct inference
     model = AutoModel.load_from_hf_hub("your-org/model-name", as_instance=True)
-
-Using the CLI
--------------
-
-xpm-torch provides a CLI command to export trained models from an
-experimaestro workspace:
-
-.. code-block:: bash
-
-    # Interactive mode — prompts for workspace, experiment, and model
-    xpm-torch upload-hfhub
-
-    # Non-interactive
-    xpm-torch upload-hfhub \
-        --workdir /path/to/workspace \
-        --experiment my-experiment \
-        --model-key my-model \
-        --repo-id your-org/model-name
-
-    # Save locally instead of uploading
-    xpm-torch upload-hfhub --save-dir /path/to/output
-
-The CLI looks for a :class:`~xpm_torch.results.TrainingResults` that was
-persisted by the experiment at the end of its run. Experiments save it
-with ``xp.save(training_results, "xpm-torch-models")``, which writes a
-serialized config under
-``<workspace>/experiments/<experiment>/current/data/xpm-torch-models/``.
-
-The CLI deserializes this config, lets you pick a model key from
-:attr:`~xpm_torch.results.TrainingResults.models`, and then calls
-:class:`~xpm_torch.huggingface.TorchHFHub` to export.
 
 Customizing the HF checkpoint format
 -------------------------------------
