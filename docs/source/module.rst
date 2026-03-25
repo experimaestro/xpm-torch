@@ -56,6 +56,8 @@ Hub Export Helpers
 
 .. autofunction:: xpm_torch.module.assemble_readme_sections
 
+.. autoxpmconfig:: xpm_torch.actions.ExportAction
+
 Results
 -------
 

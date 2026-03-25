@@ -64,8 +64,10 @@ distributed training support:
   :class:`~xpm_torch.module.ModuleLoader` instances for the best checkpoint
   via :meth:`~xpm_torch.learner.LearnerListener.init_task`.
 
-- :class:`~xpm_torch.learner.CheckpointModuleLoader` — Wraps a
-  :class:`~xpm_torch.module.ModuleLoader` with epoch metadata.
+- :class:`~xpm_torch.module.ModuleLoader` carries optional
+  :attr:`~xpm_torch.module.ModuleLoader.settings` for metadata
+  (e.g. :class:`~xpm_torch.learner.CheckpointSettings` for epoch,
+  :class:`~xpm_torch.validation.ValidationSettings` for validation key).
 
 See :doc:`training` for the full API reference.
 
