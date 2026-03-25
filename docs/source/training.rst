@@ -8,7 +8,7 @@ Learner
 
 .. autoxpmconfig:: xpm_torch.learner.LearnerListener
 
-.. autoxpmconfig:: xpm_torch.learner.CheckpointModuleLoader
+.. autoxpmconfig:: xpm_torch.learner.CheckpointSettings
 
 .. autoxpmconfig:: xpm_torch.learner.Strategy
 
@@ -46,7 +46,7 @@ Training Hooks
 Validation
 ----------
 
-.. autoxpmconfig:: xpm_torch.validation.ValidationModuleLoader
+.. autoxpmconfig:: xpm_torch.validation.ValidationSettings
 
 Batching
 --------
