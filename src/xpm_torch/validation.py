@@ -1,46 +1,26 @@
 import logging
-from pathlib import Path
 
 from experimaestro import (
-    LightweightTask,
+    Config,
     Param,
     field,
 )
-from .optim import ModuleLoader
 
 from xpm_torch.learner import LearnerListener
 
 logger = logging.getLogger(__name__)
 
 
-class ValidationModuleLoader(LightweightTask):
-    """Wrapper around a ModuleLoader for validation checkpoints.
+class ValidationSettings(Config):
+    """Settings for a validation-specific ModuleLoader.
 
-    Holds validation metadata (listener, key) and delegates loading
-    and Hub export hooks to the inner loader (produced by
-    ``Module.loader_config``).
+    Attached as ``settings`` on the loader to distinguish validation
+    checkpoints from other loaders with the same model and path.
     """
 
-    loader: Param[ModuleLoader]
-    """The actual loader (from loader_config)"""
-
     listener: Param["LearnerListener"] = field(ignore_generated=True)
-    """The listener (kept there to change the validation loader identifier based
+    """The listener (kept to change the loader identifier based
     on the learner listener configuration)"""
 
     key: Param[str]
-    """The key for this listener"""
-
-    @property
-    def value(self):
-        """The model config (delegates to the inner loader)."""
-        return self.loader.value
-
-    def execute(self):
-        self.loader.execute()
-
-    def write_hub_extras(self, save_directory: Path):
-        self.loader.write_hub_extras(save_directory)
-
-    def hub_readme_sections(self):
-        return self.loader.hub_readme_sections()
+    """The metric key for this validation checkpoint"""

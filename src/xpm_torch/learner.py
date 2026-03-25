@@ -7,7 +7,6 @@ from typing import Dict, Iterator, List, NamedTuple, Any, Optional
 from experimaestro import (
     Task,
     Config,
-    LightweightTask,
     Param,
     pathgenerator,
     Annotated,
@@ -59,32 +58,11 @@ class LearnerListenerStatus(Enum):
         return LearnerListenerStatus(max(self.value, other.value))
 
 
-class CheckpointModuleLoader(LightweightTask):
-    """Wrapper around a ModuleLoader for a specific checkpoint.
-
-    Holds epoch metadata and delegates loading and Hub export hooks
-    to the inner loader (produced by ``Module.loader_config``).
-    """
-
-    loader: Param[ModuleLoader]
-    """The actual loader (from loader_config)"""
+class CheckpointSettings(Config):
+    """Settings for a checkpoint-specific ModuleLoader."""
 
     epoch: Param[Optional[int]] = field(default=None, ignore_default=True)
     """The epoch of the checkpoint"""
-
-    @property
-    def value(self):
-        """The model config (delegates to the inner loader)."""
-        return self.loader.value
-
-    def execute(self):
-        self.loader.execute()
-
-    def write_hub_extras(self, save_directory):
-        self.loader.write_hub_extras(save_directory)
-
-    def hub_readme_sections(self):
-        return self.loader.hub_readme_sections()
 
 
 class LearnerListener(Config):
@@ -211,14 +189,12 @@ class Learner(Task, EasyLogger):
             learned_model=learned_model,
             checkpoints={
                 interval: dep(
-                    CheckpointModuleLoader.C(
-                        loader=self.model.loader_config(
-                            TrainerContext.get_checkpoint_path(
-                                self.checkpointspath, interval
-                            )
-                            / TrainState.MODEL_DIR
-                        ),
-                        epoch=interval,
+                    self.model.loader_config(
+                        TrainerContext.get_checkpoint_path(
+                            self.checkpointspath, interval
+                        )
+                        / TrainState.MODEL_DIR,
+                        settings=CheckpointSettings.C(epoch=interval),
                     )
                 )
                 for interval in range(0, self.max_epochs, self.checkpoint_interval)

@@ -77,7 +77,9 @@ class Module(Config, Initializable, nn.Module):
 
         self.load_state_dict(load_file(str(path / "model.safetensors")))
 
-    def loader_config(self, path: Path) -> "ModuleLoader":
+    def loader_config(
+        self, path: Path, *, settings: Optional[Config] = None
+    ) -> "ModuleLoader":
         """Returns a ModuleLoader config that knows how to load this model from path.
 
         The default returns a :class:`SimpleModuleLoader` with a single
@@ -86,8 +88,9 @@ class Module(Config, Initializable, nn.Module):
 
         Args:
             path: The base checkpoint path containing the model/ directory.
+            settings: Optional metadata to attach to the loader.
         """
-        return SimpleModuleLoader.C(value=self, path=path)
+        return SimpleModuleLoader.C(value=self, path=path, settings=settings)
 
     def export_action(self, loader: "ModuleLoader", **kwargs):
         """Returns an ExportAction config for this model.
@@ -180,12 +183,19 @@ class ModuleLoader(SerializationLWTask):
     files are stored (e.g. a single ``path`` or separate ``encoder_path``
     and ``query_encoder_path``).
 
+    The optional :attr:`settings` field carries opaque metadata (e.g.
+    validation key, checkpoint epoch) that distinguishes loaders with the
+    same model and path.
+
     Override :meth:`write_hub_extras` and :meth:`hub_readme_sections` to
     customize what gets written when the model is exported to HuggingFace
     Hub.
 
     The model config is accessible via :attr:`model` (alias for ``value``).
     """
+
+    settings: Param[Optional[Config]] = None
+    """Optional metadata (validation info, checkpoint epoch, etc.)"""
 
     @property
     def model(self):
