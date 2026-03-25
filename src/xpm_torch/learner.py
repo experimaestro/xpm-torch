@@ -107,11 +107,12 @@ class LearnerListener(Config):
         """Add metrics"""
         pass
 
-    def init_task(self, learner: "Learner", dep):
+    def init_task(self, learner: "Learner", dep, add_action):
         """Returns the initialization task that loads the associated checkpoint
 
         :param learner: The learner object
         :param dep: The function that adds a dependency
+        :param add_action: Function to register an action
         """
         return None
 
@@ -191,18 +192,25 @@ class Learner(Task, EasyLogger):
         ), "IDs of listeners should be unique"
         return super().__validate__()
 
-    def task_outputs(self, dep) -> LearnerOutput:
-        """Object returned when submitting the task"""
+    def __submit__(self, dep, add_action):
+        """Submit the learner task and register export actions."""
+        from xpm_torch.actions import ExportAction
+
+        learned_model = dep(
+            self.model.loader_config(
+                self.last_checkpoint_path / TrainState.MODEL_DIR
+            )
+        )
+
+        # Register export action for the learned model (tags provide description)
+        add_action(ExportAction.C(loader=learned_model, default_name="last"))
+
         return LearnerOutput(
             listeners={
-                listener.id: listener.init_task(self, dep)
+                listener.id: listener.init_task(self, dep, add_action=add_action)
                 for listener in self.listeners
             },
-            learned_model=dep(
-                self.model.loader_config(
-                    self.last_checkpoint_path / TrainState.MODEL_DIR
-                )
-            ),
+            learned_model=learned_model,
             checkpoints={
                 interval: dep(
                     CheckpointModuleLoader.C(
