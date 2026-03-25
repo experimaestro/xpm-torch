@@ -9,6 +9,7 @@ license = {text = "GPL-3"}
 
 dependencies = [
     "experimaestro>=2.3",
+    "huggingface-hub>0.17",
     "lightning>=2.4",
     "safetensors>=0.4",
     "setuptools<82.0", #needed until https://github.com/tensorflow/tensorboard/issues/7003 is fixed

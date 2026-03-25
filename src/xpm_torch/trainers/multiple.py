@@ -1,9 +1,7 @@
 from typing import Dict, Iterator
 from experimaestro import Param
 import numpy as np
-from xpm_torch.context import (
-    TrainerContext,
-)
+from xpm_torch.trainers.context import TrainerContext
 from . import Trainer
 
 

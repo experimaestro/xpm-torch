@@ -10,6 +10,8 @@ Core
 
 .. autoxpmconfig:: xpm_torch.module.ModuleLoader
 
+.. autoxpmconfig:: xpm_torch.module.SimpleModuleLoader
+
 .. autoclass:: xpm_torch.module.ModuleContainer
    :members:
 

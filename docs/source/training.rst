@@ -19,6 +19,8 @@ Trainers
 
 .. autoxpmconfig:: xpm_torch.trainers.LossTrainer
 
+.. autoxpmconfig:: xpm_torch.trainers.multiple.MultipleTrainer
+
 Training State
 --------------
 
@@ -47,6 +49,8 @@ Validation
 ----------
 
 .. autoxpmconfig:: xpm_torch.validation.ValidationSettings
+
+.. autoxpmconfig:: xpm_torch.trainers.validation.TrainerValidationLoss
 
 Batching
 --------
