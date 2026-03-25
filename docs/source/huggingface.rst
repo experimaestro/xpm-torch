@@ -16,7 +16,7 @@ The recommended way to export trained models is through experimaestro's
 it automatically registers :class:`~xpm_torch.actions.ExportAction` instances
 for the last checkpoint and for each listener's best checkpoint. After the
 experiment completes, these actions can be executed interactively via the
-experimaestro CLI (``experimaestro run-experiment … --run-actions``).
+experimaestro CLI (``experimaestro experiments actions``).
 
 :class:`~xpm_torch.actions.ExportAction` prompts the user to choose between
 uploading to HuggingFace Hub or saving to a local directory, then delegates
