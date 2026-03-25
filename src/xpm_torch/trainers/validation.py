@@ -29,7 +29,7 @@ class TrainerValidationLoss(LearnerListener):
     data: Param[SampleIterator]
     """The dataset to use"""
 
-    batcher: Param[Batcher] = field(default=Batcher(), ignore_default=True)
+    batcher: Param[Batcher] = field(default_factory=Batcher.C)
     """How to batch samples together"""
 
     batch_size: Meta[int]
