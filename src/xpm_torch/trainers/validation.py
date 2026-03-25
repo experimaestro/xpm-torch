@@ -3,7 +3,7 @@ import json
 from typing import Dict, Any
 from pathlib import Path
 
-from experimaestro import field, Annotated, Param, pathgenerator
+from experimaestro import field, Annotated, Param, Meta, pathgenerator
 
 from xpm_torch import SampleIterator
 from xpm_torch.batchers import Batcher
@@ -19,6 +19,7 @@ from xpm_torch.trainers import LossTrainer
 from xpm_torch.metrics import Metrics, ScalarMetric
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +32,7 @@ class TrainerValidationLoss(LearnerListener):
     batcher: Param[Batcher] = field(default=Batcher(), ignore_default=True)
     """How to batch samples together"""
 
-    batch_size: Param[int]
+    batch_size: Meta[int]
     """Batch size"""
 
     trainer: Param[LossTrainer]
