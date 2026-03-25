@@ -89,6 +89,20 @@ class Module(Config, Initializable, nn.Module):
         """
         return SimpleModuleLoader.C(value=self, path=path)
 
+    def export_action(self, loader: "ModuleLoader", **kwargs):
+        """Returns an ExportAction config for this model.
+
+        Subclasses override to return library-specific actions
+        (e.g. with xpmir README sections, paper metadata).
+
+        Args:
+            loader: The ModuleLoader to export.
+            **kwargs: Extra params passed to the action (e.g. default_name).
+        """
+        from xpm_torch.actions import ExportAction
+
+        return ExportAction.C(loader=loader, **kwargs)
+
     def to(self, *args, **kwargs):
         return torch.nn.Module.to(self, *args, **kwargs)
 

@@ -194,16 +194,14 @@ class Learner(Task, EasyLogger):
 
     def __submit__(self, dep, add_action):
         """Submit the learner task and register export actions."""
-        from xpm_torch.actions import ExportAction
-
         learned_model = dep(
             self.model.loader_config(
                 self.last_checkpoint_path / TrainState.MODEL_DIR
             )
         )
 
-        # Register export action for the learned model (tags provide description)
-        add_action(ExportAction.C(loader=learned_model, default_name="last"))
+        # Register export action — the model controls the action type
+        add_action(self.model.export_action(learned_model, default_name="last"))
 
         return LearnerOutput(
             listeners={
