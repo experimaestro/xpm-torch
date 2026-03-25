@@ -102,3 +102,4 @@ venv.bak/
 .mypy_cache/
 .vscode/
 src/xpmir/_version.py
+.DS_Store

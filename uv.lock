@@ -369,7 +369,7 @@ wheels = [
 
 [[package]]
 name = "experimaestro"
-version = "2.2.0"
+version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arpeggio" },
@@ -400,9 +400,9 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchdog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/85/6b/d607505891097b56ccd36f1d29a3cf4bae085e51f7fc5f89a7b346e4e281/experimaestro-2.2.0.tar.gz", hash = "sha256:ffdc501fe76cbc99990ec78acc2ae7d20c61eeaf3bdf74a582d1de6a62fc2255", size = 28536045, upload-time = "2026-03-23T06:29:50.311Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/3d/ad937fa63dfb68bcc916de22c8ebd818f68645d5472467857f8e07332d15/experimaestro-2.3.0.tar.gz", hash = "sha256:3edec23139f8842924c57eaa50bb8b45d0aedee72f1159104ac348f6c536df76", size = 28547304, upload-time = "2026-03-25T11:57:04.888Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/11/f6/e1f93843bd8ae4ab3526b9cea61460ebe9282d930a6804025aa25662120c/experimaestro-2.2.0-py3-none-any.whl", hash = "sha256:5cee26863c7dde8452faa78e28831bd01f6ada646edcaac30356e9f9dd842e3d", size = 2992467, upload-time = "2026-03-23T06:29:47.419Z" },
+    { url = "https://files.pythonhosted.org/packages/19/aa/d8488b6cd7a531fa688af46baa9cf8b218aef74f052e21176a6b0a03ac79/experimaestro-2.3.0-py3-none-any.whl", hash = "sha256:b80dbf9fa06f643f7ac8cc2596df8bd3f65a001b7141695056e573dc2b66883e", size = 3006025, upload-time = "2026-03-25T11:57:02.37Z" },
 ]
 
 [[package]]
@@ -2952,7 +2952,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "experimaestro", specifier = ">=2.2.0" },
+    { name = "experimaestro", specifier = ">=2.3" },
     { name = "lightning", specifier = ">=2.4" },
     { name = "safetensors", specifier = ">=0.4" },
     { name = "setuptools", specifier = "<82.0" },
@@ -2963,14 +2963,14 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [{ name = "ruff", specifier = ">=0.15.7" }]
 docs = [
-    { name = "experimaestro", specifier = ">=2.2.0" },
+    { name = "experimaestro", specifier = ">=2.3" },
     { name = "sphinx", specifier = ">=6" },
     { name = "sphinx-codeautolink", specifier = ">=0.15" },
     { name = "sphinx-rtd-theme", specifier = ">=3" },
     { name = "sphobjinv", specifier = ">=2.3" },
 ]
 test = [
-    { name = "experimaestro", specifier = ">=2.2.0" },
+    { name = "experimaestro", specifier = ">=2.3" },
     { name = "pytest", specifier = ">=8" },
     { name = "sphinx", specifier = ">=6" },
     { name = "sphinx-codeautolink", specifier = ">=0.15" },
