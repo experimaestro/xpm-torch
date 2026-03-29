@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from typing import Dict, Iterator, List, Optional
-from experimaestro import Config, Param, field
+from experimaestro import Config, Param, Meta, field
 import torch
 import torch.nn as nn
 import numpy as np
@@ -82,7 +82,7 @@ class LossTrainer(Trainer):
     Uses StatefulDataLoader + IterableDataset for data loading.
     """
 
-    batcher: Param[Batcher] = field(default_factory=Batcher.C)
+    batcher: Meta[Batcher] = field(default_factory=Batcher.C)
     """How to batch samples together"""
 
     sampler: Param[Sampler]
@@ -143,7 +143,7 @@ class LossTrainer(Trainer):
             dataloader_state = self.dataloader._dataloader.state_dict()
         else:
             dataloader_state = self.dataloader.state_dict()
-            
+
         return {"dataloader": dataloader_state}
 
     def process_batch(self, batch: list):

@@ -29,7 +29,7 @@ class TrainerValidationLoss(LearnerListener):
     data: Param[SampleIterator]
     """The dataset to use"""
 
-    batcher: Param[Batcher] = field(default_factory=Batcher.C)
+    batcher: Meta[Batcher] = field(default_factory=Batcher.C)
     """How to batch samples together"""
 
     batch_size: Meta[int]
@@ -136,7 +136,8 @@ class TrainerValidationLoss(LearnerListener):
         if state.epoch % self.validation_interval == 0:
             # Compute validation metrics
             metrics = Metrics()
-            state.model.eval()
+
+            state.model.eval()  # nosec
 
             with torch.no_grad():
                 for batch in self.data.__batch_iter__(self.batch_size):

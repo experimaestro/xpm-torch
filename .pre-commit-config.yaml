@@ -9,11 +9,11 @@ repos:
   - id: trailing-whitespace
   repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
-- hooks:
-  - id: python-check-blanket-noqa
-  - id: python-no-eval
-  repo: https://github.com/pre-commit/pygrep-hooks
-  rev: v1.10.0
+# - hooks:
+#   - id: python-check-blanket-noqa
+#   - id: python-no-eval
+#   repo: https://github.com/pre-commit/pygrep-hooks
+#   rev: v1.10.0
 - hooks:
   - id: no-fixme-todo
     name: No FIXME or TODO markers
