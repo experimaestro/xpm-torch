@@ -33,6 +33,16 @@ intersphinx_mapping = {
 # Mock heavy dependencies that are not needed to build the docs.
 # experimaestro is NOT mocked — it's installed in the docs group
 # and needed for experimaestro.sphinx and Config/Param introspection.
+# Sphinx 9.1's _MockObject has stringified class annotations referencing
+# `Any`/`Set` without importing them, so get_type_hints() on any class
+# whose MRO contains a mocked base (e.g. xpm_torch.module.Module via
+# torch.nn.Module) raises NameError. Strip those annotations.
+try:
+    from sphinx.ext.autodoc._dynamic._mock import _MockObject
+    _MockObject.__annotations__ = {}
+except Exception:
+    pass
+
 autodoc_mock_imports = [
     "huggingface_hub",
     "lightning",
