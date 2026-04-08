@@ -108,8 +108,9 @@ HuggingFace Hub
 ~~~~~~~~~~~~~~~
 
 Utility functions for cache checking and downloading from HuggingFace Hub.
-Model upload/download is handled by ``ExperimaestroHFHub`` (from the
-experimaestro package).
+Model upload/download is handled by :class:`~xpm_torch.huggingface.TorchHFHub`
+(which extends ``ExperimaestroHFHub`` from the experimaestro package)
+to provide better integration for xpm-torch models and their loaders.
 
 Experiment results
 ~~~~~~~~~~~~~~~~~~

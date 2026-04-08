@@ -5,20 +5,24 @@ Provides :class:`TorchHFHub` for exporting ModuleLoaders to the Hub
 functions for cache checking and downloading.
 """
 
-import json
-import logging
+import json, os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Type, Dict, TypeVar
 
 from experimaestro.huggingface import ExperimaestroHFHub
 from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
+from experimaestro.core.context import SerializedPath
+from experimaestro.core.objects import ConfigInformation
 
-from xpm_torch.module import assemble_readme_sections
+from xpm_torch.module import Module, ModuleLoader, assemble_readme_sections
 
+import logging
 logger = logging.getLogger(__name__)
 
+# Generic variable that is either ModelHubMixin or a subclass thereof
+T = TypeVar("T", bound="TorchHFHub")
 
 @lru_cache
 def prepare_hf_model(model_id: str) -> bool:
@@ -175,7 +179,7 @@ class TorchHFHub(ExperimaestroHFHub):
 
     Extends :class:`~experimaestro.huggingface.ExperimaestroHFHub` to call
     :meth:`~xpm_torch.module.ModuleLoader.write_hub_extras` after
-    serialization and build the README from
+    serialization and build the README.
     :meth:`~xpm_torch.module.ModuleLoader.hub_readme_sections`.
 
     Subclass this (e.g. ``XPMIRHFHub``) to add library-specific README
@@ -195,6 +199,114 @@ class TorchHFHub(ExperimaestroHFHub):
         if base_sections or loader_sections:
             readme = assemble_readme_sections(base_sections, loader_sections)
             (save_directory / "README.md").write_text(readme)
+
+
+    @classmethod
+    def _from_pretrained(
+        cls,
+        model_id,
+        revision,
+        cache_dir,
+        force_download,
+        proxies,
+        resume_download,
+        local_files_only,
+        token,
+        **model_kwargs
+    ) -> Module:
+        """
+        This overrides `ExperimaestroHFHub._from_pretrained`
+        outputs directly the model instance instead of the loader.
+        """
+        if os.path.isdir(model_id):
+            save_directory = Path(model_id)
+
+            def loader_path(path: Path):
+                if isinstance(path, SerializedPath):
+                    path = path.path
+                else:
+                    path = Path(path)
+                return save_directory / path
+
+        else:
+
+            def loader_path(s_path: Union[Path, str, SerializedPath]) -> Path:
+                if not isinstance(s_path, SerializedPath):
+                    s_path = SerializedPath(Path(s_path), False)
+                path = s_path.path
+
+                # Folder
+                if s_path.is_folder:
+                    hf_path = snapshot_download(
+                        repo_id=model_id,
+                        allow_patterns=f"{s_path.path}/**",
+                        revision=revision,
+                        cache_dir=cache_dir,
+                        proxies=proxies,
+                        resume_download=resume_download,
+                        token=token,
+                        local_files_only=local_files_only,
+                    )
+                    return Path(hf_path) / path
+
+                hf_path = Path(
+                    hf_hub_download(
+                        repo_id=model_id,
+                        filename=str(path),
+                        revision=revision,
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        proxies=proxies,
+                        resume_download=resume_download,
+                        token=token,
+                        local_files_only=local_files_only,
+                    )
+                )
+                return hf_path
+
+        loader: ModuleLoader = ConfigInformation.deserialize(
+            loader_path,
+            as_instance=True,
+            partial_loading=True,
+            definition_filename=cls.definition_filename,
+        )
+        #execute the moduleLoader Instance -> loads the model
+        loader.execute()
+
+        return loader.model
+
+    @classmethod
+    def pretrained_loader(
+        cls: Type[T],
+        pretrained_model_name_or_path: Union[str, Path],
+        *,
+        force_download: bool = False,
+        resume_download: Optional[bool] = None,
+        proxies: Optional[Dict] = None,
+        token: Optional[Union[str, bool]] = None,
+        cache_dir: Optional[Union[str, Path]] = None,
+        local_files_only: bool = False,
+        revision: Optional[str] = None,
+        as_instance: bool = False, #specific to this Class
+        **model_kwargs,
+    ) -> ModuleLoader:
+        """
+        Download a model _loader_ from the Huggingface Hub.
+        """
+        # Call parent's _from_pretrained directly to avoid the overridden version
+        return ExperimaestroHFHub.from_pretrained(
+            pretrained_model_name_or_path=pretrained_model_name_or_path,
+            revision=revision,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            proxies=proxies,
+            resume_download=resume_download,
+            local_files_only=local_files_only,
+            token=token,
+            as_instance=as_instance, # pass to super but it will be ignored
+            **model_kwargs,
+        )
+
 
     def _readme_base_sections(self):
         """Return base README sections. Override in subclasses to add

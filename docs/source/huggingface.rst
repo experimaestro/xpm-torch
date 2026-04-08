@@ -103,28 +103,56 @@ The serialized directory contains:
 Loading a model from the Hub
 -----------------------------
 
-Low-level (experimaestro):
+You can load models from the HuggingFace Hub using :class:`~xpm_torch.huggingface.TorchHFHub`.
+There are two main ways to load a model depending on whether you want:
+- Direct access to the initialized model instance 
+- Only configuration (loader) itself (for instance in an experiment file).
+
+Loading a model instance
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+To load a model as a ready-to-use instance (already initialized and with
+weights loaded), use :meth:`~xpm_torch.huggingface.TorchHFHub.from_pretrained`.
+This is ideal for direct inference or when you don't need to manipulate
+the configuration:
+
+.. code-block:: python
+
+    from xpm_torch.huggingface import TorchHFHub
+
+    # Returns an initialized Module instance with weights loaded
+    model = TorchHFHub.from_pretrained("your-org/model-name")
+
+Loading a model loader
+~~~~~~~~~~~~~~~~~~~~~~
+
+To load a :class:`~xpm_torch.module.ModuleLoader` configuration instead of
+an instance, use :meth:`~xpm_torch.huggingface.TorchHFHub.pretrained_loader`.
+This returns a ``ModuleLoader`` config object that can be used as an
+initialization task in larger experiments:
+
+.. code-block:: python
+
+    from xpm_torch.huggingface import TorchHFHub
+
+    # Returns a ModuleLoader config object
+    loader_cfg = TorchHFHub.pretrained_loader("your-org/model-name")
+
+    # The model config is accessible via loader_cfg.model
+    model_cfg = loader_cfg.model
+
+Low-level access
+~~~~~~~~~~~~~~~~
+
+If you need the raw deserialized data from the Hub without any xpm-torch
+specific processing, you can use the base experimaestro class:
 
 .. code-block:: python
 
     from experimaestro.huggingface import ExperimaestroHFHub
 
-    # Returns a deserialized config (e.g. ModuleLoader)
+    # Returns the deserialized config (e.g. a ModuleLoader)
     data = ExperimaestroHFHub.from_pretrained("your-org/model-name")
-
-For xpmir models, use ``AutoModel`` which returns a
-:class:`~xpm_torch.module.ModuleLoader` directly:
-
-.. code-block:: python
-
-    from xpmir.models import AutoModel
-
-    # Returns a ModuleLoader — use as an init task in experiments
-    loader = AutoModel.load_from_hf_hub("your-org/model-name")
-    # loader.model is the model config
-
-    # Or load as a ready-to-use instance for direct inference
-    model = AutoModel.load_from_hf_hub("your-org/model-name", as_instance=True)
 
 Customizing the HF checkpoint format
 -------------------------------------
@@ -163,7 +191,7 @@ method to return a custom loader with different ``DataPath`` fields:
 
 Loaders can also override ``__xpm_serialize__`` to control the directory
 names used during serialization (e.g. mapping field names to
-sentence-transformers conventions).
+sentence-transformers conventions as done [here](https://github.com/experimaestro/experimaestro-ir/blob/d685910db9222e7b4b95aaf30e94d6052f27c6f8/src/xpmir/neural/splade.py#L235)).
 
 :meth:`~xpm_torch.module.Module.save_model` / :meth:`~xpm_torch.module.Module.load_model`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -245,9 +273,7 @@ Class hierarchy
 Utility functions
 -----------------
 
-Helper functions for working with HuggingFace Hub (cache checks,
-downloads, config retrieval):
+Helper functions and classes for working with HuggingFace Hub:
 
 .. automodule:: xpm_torch.huggingface
    :members:
-   :exclude-members: TorchHFHub
