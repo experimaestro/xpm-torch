@@ -205,13 +205,13 @@ class TorchHFHub(ExperimaestroHFHub):
     def _from_pretrained(
         cls,
         model_id,
-        revision,
-        cache_dir,
-        force_download,
-        proxies,
-        resume_download,
-        local_files_only,
-        token,
+        revision=None,
+        cache_dir=None,
+        force_download=False,
+        proxies=None,
+        resume_download=None,
+        local_files_only=False,
+        token=None,
         **model_kwargs
     ) -> Module:
         """
