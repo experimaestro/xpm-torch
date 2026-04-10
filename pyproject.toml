@@ -8,7 +8,7 @@ readme = "README.md"
 license = {text = "GPL-3"}
 
 dependencies = [
-    "experimaestro>=2.3",
+    "experimaestro>=2.3.4",
     "huggingface-hub>0.17",
     "lightning>=2.4",
     "safetensors>=0.4",
