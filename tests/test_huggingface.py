@@ -3,7 +3,6 @@ import torch.nn as nn
 from experimaestro import Param
 from xpm_torch.module import Module, SimpleModuleLoader
 from xpm_torch.huggingface import TorchHFHub
-from pathlib import Path
 
 
 class DummyModule(Module):

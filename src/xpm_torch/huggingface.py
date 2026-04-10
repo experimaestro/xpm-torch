@@ -5,7 +5,8 @@ Provides :class:`TorchHFHub` for exporting ModuleLoaders to the Hub
 functions for cache checking and downloading.
 """
 
-import json, os
+import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Union, Type, Dict, TypeVar
