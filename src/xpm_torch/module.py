@@ -70,9 +70,14 @@ class Module(Config, Initializable, nn.Module):
         """Count the number of parameters in the model"""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
+    def get_forward_methods(self) -> list:
+        """Returns the list of forward methods for this scorer. Needed to set up Fabric with multiple forward methods.
+        By default, it is just `forward`, but it can be extended to support multiple forward methods (e.g. for different scoring strategies)"""
+        return []
+
     def save_model(self, path: Path):
         """Save model parameters to a directory or a file using safetensors.
-        
+
         If the path ends with .safetensors, it saves directly to that file.
         Otherwise, it creates a directory and saves as 'model.safetensors' inside.
         """
@@ -87,7 +92,7 @@ class Module(Config, Initializable, nn.Module):
     def load_model(self, path: Path):
         """Load model parameters from a directory or a file."""
         from safetensors.torch import load_file
-        
+
         if path.is_file():
             self.load_state_dict(load_file(str(path)))
         elif (path / "model.safetensors").exists():
@@ -333,8 +338,12 @@ class ModuleContainer(nn.Module):
         for name, module in modules_to_wrap.items():
             # Wrap the module and re-assign it
             wrapped = fabric.setup(module)
+
+            for method_name in module.get_forward_methods():
+                wrapped.mark_forward_method(method_name)
+
             setattr(self, name, wrapped)
-            logger.debug(f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}")
+            logger.info(f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}")
 
 
 def find_module_attributes(obj) -> dict:
@@ -351,4 +360,3 @@ def find_module_attributes(obj) -> dict:
             found_modules[attr_name] = attr_value
 
     return found_modules
-
