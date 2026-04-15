@@ -35,7 +35,7 @@ class FabricConfiguration(FabricConfigurationBase):
 
     #parameters - change Learner output
     precision: Param[str] = field(default="32-true", ignore_default=True)
-    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true': 
+    """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true':
     see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
     """
 
@@ -43,13 +43,13 @@ class FabricConfiguration(FabricConfigurationBase):
     """Torch precision for torch.float32 operations, see https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
     Automatically set depending on fabric_config.precision if not set, but can be overridden if needed (e.g., to force TF32 on Ampere GPUs while using bf16 precision for other operations)
     """
-    
+
     # Meta - parameters - don't change output, just computing environment
     num_nodes: Meta[int] = field(default=1, ignore_default=True)
     """Number of nodes"""
 
     devices: Meta[str] = field(default="auto", ignore_default=True)
-    """Configure the devices to run on. 
+    """Configure the devices to run on.
     See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#devices for more details and options.
     Note that for multi-node training, you should specify the devices per node, e.g., devices="4" for 4 GPUs per node, not devices="16" for a total of 16 GPUs across 4 nodes.
     """
@@ -63,7 +63,7 @@ class FabricConfiguration(FabricConfigurationBase):
     """The accelerator to use
     See https://lightning.ai/docs/fabric/stable/api/fabric_args.html#accelerator for more details and options.
     """
-    
+
     is_built = False
 
 
@@ -73,8 +73,8 @@ class FabricConfiguration(FabricConfigurationBase):
         """
         if self.is_built:
             logger.warning("FabricConfiguration.get_Fabric called multiple times.")
-            return None 
-        
+            return None
+
         self.is_built = True
         if self.torch_fp32_precision is None:
             #auto set torch.float32 precision based on fabric precision (if not set explicitly)
@@ -83,13 +83,15 @@ class FabricConfiguration(FabricConfigurationBase):
             else:
                 self.torch_fp32_precision = "high"
             logger.info(f"Setting torch.fp32 matmul precision to '{self.torch_fp32_precision}' based on fabric precision '{self.precision}'")
-        
+
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
-        return L.Fabric(
+        fabric = L.Fabric(
             accelerator=self.accelerator,
             devices=self.devices,
             strategy=self.strategy,
             num_nodes=self.num_nodes,
             **kwargs
         )
+        logging.info(f"Using Fabric with accelerator={fabric.accelerator}, devices={fabric.world_size}, strategy={fabric.strategy}")
+        return fabric
