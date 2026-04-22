@@ -40,10 +40,6 @@ class ShardedIterableDataset(IterableDataset[T]):
         else:
             # Fallback to environment variables if torch.distributed is not initialized
             # (common when Fabric spawns processes without srun)
-            logging.warning(
-                "torch.distributed not initialized, falling back to environment variables for sharding. "
-                "This may lead to incorrect sharding if running under a launcher like srun that sets SLURM_PROCID but does not initialize torch.distributed."
-            )
             rank = int(
                 os.environ.get(
                     "SLURM_PROCID",
@@ -58,6 +54,12 @@ class ShardedIterableDataset(IterableDataset[T]):
                     ),
                 )
             )
+            if rank or world_size > 1:
+                logging.warning(
+                    "torch.distributed not initialized, falling back to environment variables for sharding."
+                    f"Detected rank={rank}, world_size={world_size} from environment."
+                    "This may lead to incorrect sharding if running under a launcher like srun that sets SLURM_PROCID but does not initialize torch.distributed."
+                )
 
         # DataLoader worker-level sharding
         worker_info = get_worker_info()
