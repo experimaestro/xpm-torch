@@ -329,6 +329,7 @@ class ModuleContainer(nn.Module):
         """
         Self-identifies which children need Fabric wrapping.
         """
+        self.fabric = fabric
         modules_to_wrap = self.get_manageable_modules()
 
         if not modules_to_wrap:

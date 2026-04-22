@@ -31,13 +31,33 @@ class ShardedIterableDataset(IterableDataset[T]):
 
     def _resolve_sharding(self) -> tuple[int, int]:
         """Return ``(shard_id, num_shards)`` for the current context."""
+        import os
+
         # GPU-level sharding
         if dist.is_available() and dist.is_initialized():
             rank = dist.get_rank()
             world_size = dist.get_world_size()
         else:
-            rank = 0
-            world_size = 1
+            # Fallback to environment variables if torch.distributed is not initialized
+            # (common when Fabric spawns processes without srun)
+            logging.warning(
+                "torch.distributed not initialized, falling back to environment variables for sharding. "
+                "This may lead to incorrect sharding if running under a launcher like srun that sets SLURM_PROCID but does not initialize torch.distributed."
+            )
+            rank = int(
+                os.environ.get(
+                    "SLURM_PROCID",
+                    os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")),
+                )
+            )
+            world_size = int(
+                os.environ.get(
+                    "SLURM_NTASKS",
+                    os.environ.get(
+                        "WORLD_SIZE", os.environ.get("LOCAL_WORLD_SIZE", "1")
+                    ),
+                )
+            )
 
         # DataLoader worker-level sharding
         worker_info = get_worker_info()
@@ -303,11 +323,11 @@ class TransformDataset(ShardedIterableDataset[T]):
     def iter_shard(self, shard_id: int, num_shards: int) -> Iterator[T]:
         for item in self.inner.iter_shard(shard_id, num_shards):
             transformed = self.transform(item)
-            
+
             if transformed is None:
                 continue
-                
-            # Check if the result is iterable (like your generator) 
+
+            # Check if the result is iterable (like your generator)
             # but not a single sample object
             if isinstance(transformed, (list, types.GeneratorType)):
                 for sub_item in transformed:
