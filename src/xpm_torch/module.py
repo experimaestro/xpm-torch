@@ -270,6 +270,11 @@ class SimpleModuleLoader(ModuleLoader):
         """Serialize the path directly to model.safetensors at the root"""
         result = {}
         path = Path(self.path)
+
+        # Ensure path exists and is not the current directory (resolved from empty string)
+        if not path.exists() or path.resolve() == Path.cwd().resolve():
+            raise FileNotFoundError(f"Cannot serialize SimpleModuleLoader: path '{self.path}' does not exist or is the current directory")
+
         # If it's a directory, point to the file inside it so it gets
         # serialized as a file instead of a directory
         if path.is_dir() and (path / "model.safetensors").exists():

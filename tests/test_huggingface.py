@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import pytest
 from experimaestro import Param
 from xpm_torch.module import Module, SimpleModuleLoader
 from xpm_torch.huggingface import TorchHFHub
@@ -21,7 +22,7 @@ def test_torch_hf_hub_loading(tmp_path):
     cfg = DummyModule.C(dim=10)
     model = cfg.instance()
     model.initialize()
-    
+
     # Run forward to get a reference output
     x = torch.randn(1, 10)
     expected_out = model(x)
@@ -32,7 +33,7 @@ def test_torch_hf_hub_loading(tmp_path):
 
     # Create a loader for this model
     loader = SimpleModuleLoader.C(value=cfg, path=model_dir)
-    
+
     # Save as a "pretrained" model (mimicking Hub structure)
     save_dir = tmp_path / "pretrained_hub"
     hub = TorchHFHub(loader)
@@ -42,7 +43,7 @@ def test_torch_hf_hub_loading(tmp_path):
     loaded_model = TorchHFHub.from_pretrained(save_dir)
     assert isinstance(loaded_model, DummyModule)
     assert loaded_model._initialized
-    
+
     # Verify weights were loaded correctly
     actual_out = loaded_model(x)
     assert torch.allclose(expected_out, actual_out)
@@ -55,3 +56,22 @@ def test_torch_hf_hub_loading(tmp_path):
     # It doesn't necessarily mean execute() was called.
     loaded_loader_instance.execute()
     assert torch.allclose(expected_out, loaded_loader_instance.model(x))
+
+def test_torch_hf_hub_save_empty_parameters(tmp_path):
+    """Test save_pretrained when the parameters path is problematic."""
+    cfg = DummyModule.C(dim=10)
+
+    # Scenario 1: Path does not exist
+    bad_path = tmp_path / "does_not_exist"
+    loader = SimpleModuleLoader.C(value=cfg, path=bad_path)
+    hub = TorchHFHub(loader)
+
+    with pytest.raises(FileNotFoundError):
+        hub.save_pretrained(tmp_path / "hub_non_existent")
+
+    # Scenario 2: Path is an empty string
+    loader_empty = SimpleModuleLoader.C(value=cfg, path="")
+    hub_empty = TorchHFHub(loader_empty)
+
+    with pytest.raises(FileNotFoundError):
+        hub_empty.save_pretrained(tmp_path / "hub_empty_string")
