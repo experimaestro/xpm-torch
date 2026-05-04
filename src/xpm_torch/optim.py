@@ -239,7 +239,11 @@ class GradientClippingHook(GradientHook):
     def __call__(self, main: "ScheduledOptimizer"):
         # torch.nn.utils.clip_grad_norm_(main.module.parameters(), self.max_norm)
         for optimizer in main.optimizers:
-            main.trainer_context.fabric.clip_gradients(main.module, optimizer, self.max_norm )
+            main.trainer_context.fabric.clip_gradients(
+                main.module,
+                optimizer,
+                max_norm=self.max_norm
+                )
 
 
 class GradientLogHook(GradientHook):
