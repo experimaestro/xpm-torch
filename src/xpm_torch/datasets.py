@@ -55,7 +55,7 @@ class ShardedIterableDataset(IterableDataset[T]):
                 )
             )
             if rank or world_size > 1:
-                logging.warning(
+                logger.error(
                     "torch.distributed not initialized, falling back to environment variables for sharding."
                     f"Detected rank={rank}, world_size={world_size} from environment."
                     "This may lead to incorrect sharding if running under a launcher like srun that sets SLURM_PROCID but does not initialize torch.distributed."
