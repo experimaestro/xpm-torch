@@ -9,7 +9,6 @@ from typing import (
     Iterable,
     Tuple,
     Type,
-    Optional,
 )
 import inspect
 import logging
