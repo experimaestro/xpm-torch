@@ -59,6 +59,16 @@ class Trainer(Config, EasyLogger):
         for hook in self.context.hooks(nn.Module):
             hook.to(device)
 
+    def pre_train_setup(self, fabric):
+        """Hook called after `initialize` and after the optimizer is set up, but
+        BEFORE `fabric.setup(model)` wraps the model with DDP. Default is a
+        no-op; subclasses (e.g. `LossTrainer`) override to drive batcher
+        profiling on an unwrapped model. The timing matters: running rank-0-only
+        forward+backward on a DDP-wrapped model would deadlock at the first
+        gradient-bucket all_reduce.
+        """
+        return
+
     @abstractmethod
     def iter_batches(self) -> Iterator:
         """Returns a (serializable) iterator over batches"""
@@ -145,6 +155,19 @@ class LossTrainer(Trainer):
             dataloader_state = self.dataloader.state_dict()
 
         return {"dataloader": dataloader_state}
+
+    def pre_train_setup(self, fabric):
+        """Drive batcher pre-train setup (e.g. profiling for a predictive
+        batcher), then discard gradients accumulated during probing.
+
+        Must be invoked after the optimizer is initialized and before
+        `fabric.setup(model)`; see `Trainer.pre_train_setup` for the rationale.
+        """
+        self.batcher_worker.pre_train_setup(
+            probe_fn=self.process_microbatch,
+            fabric=fabric,
+        )
+        self.context.state.optimizer.zero_grad()
 
     def process_batch(self, batch: list):
         """Compute loss for a given batch of records - called by the learner.

@@ -273,6 +273,11 @@ class Learner(Task, EasyLogger):
             trainer_context=self.context,
         )
 
+        # Trainer hook for one-time setup that needs the model on the device but
+        # NOT yet DDP-wrapped (e.g. predictive batcher probing on rank 0). Must
+        # run after the optimizer is initialized and before fabric.setup(model).
+        self.trainer.pre_train_setup(fabric)
+
         # wrap model and optimizers
         self.model, *self.optimizer.optimizers = fabric.setup(
             self.model, *self.optimizer.optimizers

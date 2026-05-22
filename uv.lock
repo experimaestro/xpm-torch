@@ -3037,7 +3037,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "experimaestro", specifier = ">=2.3" },
+    { name = "experimaestro", specifier = ">=2.3.4" },
     { name = "huggingface-hub", specifier = ">0.17" },
     { name = "lightning", specifier = ">=2.4" },
     { name = "safetensors", specifier = ">=0.4" },
