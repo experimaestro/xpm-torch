@@ -1,9 +1,9 @@
 import logging
 import re
-import socket
 import time
 from pathlib import Path
 from sys import executable
+from typing import Optional
 
 from experimaestro import (
     tagspath,
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class TensorboardService(ProcessWebService):
     id = "tensorboard"
 
-    def __init__(self, path: Path):
-        super().__init__()
+    def __init__(self, path: Path, log_directory: Optional[Path] = None):
+        super().__init__(log_directory=log_directory)
 
         self.path = path
         logging.info("Tensorboard path is %s", self.path)
@@ -37,7 +37,9 @@ class TensorboardService(ProcessWebService):
             logging.info("tensorboard --logdir=%s", self.path)
 
     def state_dict(self):
-        return {"path": self.path}
+        state = super().state_dict()
+        state.update({"path": self.path})
+        return state
 
     def add(self, task: Task, path: Path):
         if not self.active:
@@ -65,16 +67,7 @@ class TensorboardService(ProcessWebService):
     def description(self):
         return "Tensorboard service"
 
-    @staticmethod
-    def _find_available_port(start: int = 6006, max_tries: int = 100) -> int:
-        for port in range(start, start + max_tries):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                if s.connect_ex(("localhost", port)) != 0:
-                    return port
-        return 0
-
     def _build_command(self) -> list[str]:
-        port = self._find_available_port()
         return [
             executable,
             "-m",
@@ -84,12 +77,20 @@ class TensorboardService(ProcessWebService):
             "--host",
             "localhost",
             "--port",
-            str(port),
+            "0",
         ]
 
     def _wait_for_ready(self) -> str:
         """Poll stdout and stderr for TensorBoard's URL announcement."""
         url_pattern = re.compile(r"https?://localhost:\d+\S*")
+
+        # Safety check: if we don't have log files, we can't wait for ready
+        if not self.stdout and not self.stderr:
+            logging.error("No log files available for TensorBoard - cannot detect URL")
+            raise RuntimeError(
+                "TensorBoard log files are missing (log_directory is None)"
+            )
+
         while True:
             if self.process and self.process.poll() is not None:
                 # Read any error output for diagnostics
