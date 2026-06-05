@@ -5,9 +5,16 @@ from pathlib import Path
 # the full project (which would pull in torch, lightning, etc.)
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from xpm_torch import __version__
+
 project = "xpm-torch"
 copyright = "2024, Benjamin Piwowarski"
 author = "Benjamin Piwowarski"
+
+# The short X.Y version
+version = __version__
+# The full version, including alpha/beta/rc tags
+release = __version__
 
 extensions = [
     # Experimaestro extension for documenting Config/Param classes
