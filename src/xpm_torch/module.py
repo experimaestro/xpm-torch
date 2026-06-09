@@ -260,7 +260,7 @@ class SimpleModuleLoader(ModuleLoader):
     """Default ModuleLoader with a single ``path`` DataPath.
 
     Loads model weights from a checkpoint directory containing either
-    a ``model/`` subdirectory (safetensors) or a ``model.pth`` file.
+    a ``model/`` subdirectory (safetensors) or a ``model.safetensors`` file.
     """
 
     path: DataPath
@@ -268,7 +268,6 @@ class SimpleModuleLoader(ModuleLoader):
 
     def __xpm_serialize__(self, context):
         """Serialize the path directly to model.safetensors at the root"""
-        result = {}
         path = Path(self.path)
 
         # Ensure path exists and is not the current directory (resolved from empty string)
@@ -281,17 +280,16 @@ class SimpleModuleLoader(ModuleLoader):
             path = path / "model.safetensors"
 
         # Serialize the 'path' field under the name "model.safetensors"
-        result["path"] = context.serialize(
+        return {"path": context.serialize(
             context.var_path + ["model.safetensors"], path, self
-        )
-        return result
+        )}
 
     def execute(self):
         """Loads the model from disk using the given serialization path"""
-        self.value.initialize()
         path = Path(self.path)
         logger.info("Loading model from disk: %s", path)
         self.value.load_model(path)
+        self.value.initialize()
 
 
 class ModuleContainer(nn.Module):
