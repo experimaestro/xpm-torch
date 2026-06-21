@@ -103,3 +103,6 @@ venv.bak/
 .vscode/
 src/xpm_torch/version.py
 .DS_Store
+
+# CodeGraph local index
+.codegraph/
