@@ -2991,8 +2991,25 @@ wheels = [
 ]
 
 [[package]]
+name = "xpm-mlboard"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "experimaestro" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c4/e1/9b7c0f43d9968cb0d2f9021414b3bde764e00124d348e1ca651a78dc4146/xpm_mlboard-0.2.0.tar.gz", hash = "sha256:53dc5fec447f4408584ed50268e0f5898c8dc45fcdd2f26216c28bd4c3b8c1b2", size = 122610, upload-time = "2026-06-21T06:30:32.451Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cc/63/8be424961fc71fc06db71249c8f83bf40ec1d6e3ceb5aa26185975c9bae9/xpm_mlboard-0.2.0-py3-none-any.whl", hash = "sha256:cc2e086b6a010449dde2732145903b78d3e075302019c80ccf2bd36d72f543e4", size = 5804, upload-time = "2026-06-21T06:30:31.228Z" },
+]
+
+[package.optional-dependencies]
+tensorboard = [
+    { name = "setuptools" },
+    { name = "tensorboard" },
+]
+
+[[package]]
 name = "xpm-torch"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "experimaestro" },
@@ -3002,6 +3019,7 @@ dependencies = [
     { name = "setuptools" },
     { name = "tensorboard" },
     { name = "torchdata" },
+    { name = "xpm-mlboard", extra = ["tensorboard"] },
 ]
 
 [package.dev-dependencies]
@@ -3044,6 +3062,7 @@ requires-dist = [
     { name = "setuptools", specifier = "<82.0" },
     { name = "tensorboard", specifier = ">=2.19.0" },
     { name = "torchdata", specifier = ">=0.10" },
+    { name = "xpm-mlboard", extras = ["tensorboard"], specifier = ">=0.2.0" },
 ]
 
 [package.metadata.requires-dev]

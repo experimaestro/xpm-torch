@@ -12,9 +12,13 @@ dependencies = [
     "huggingface-hub>0.17",
     "lightning>=2.4",
     "safetensors>=0.4",
-    "setuptools<82.0", #needed until https://github.com/tensorflow/tensorboard/issues/7003 is fixed
+    # tensorboard <2.21 imports the removed-in-setuptools-82 pkg_resources;
+    # fixed by tensorflow/tensorboard#7057 (issue #7003), released in tensorboard 2.21.
+    # Drop this pin once we require tensorboard>=2.21.
+    "setuptools<82.0",
     "tensorboard>=2.19.0",
     "torchdata>=0.10",
+    "xpm-mlboard[tensorboard]>=0.2.0",
 ]
 
 [project.scripts]
