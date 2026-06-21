@@ -288,8 +288,10 @@ class SimpleModuleLoader(ModuleLoader):
         """Loads the model from disk using the given serialization path"""
         path = Path(self.path)
         logger.info("Loading model from disk: %s", path)
-        self.value.load_model(path)
+        # Build the module structure first so its parameters are registered,
+        # then load the weights into it (load_model calls load_state_dict).
         self.value.initialize()
+        self.value.load_model(path)
 
 
 class ModuleContainer(nn.Module):
