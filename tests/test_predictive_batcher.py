@@ -11,7 +11,6 @@ from xpm_torch.batchers import (
     AdaptivePacker,
     BatchDimsProvider,
     PredictiveBatcher,
-    PredictiveBatcherWorker,
     ProbePoint,
     UniformPacker,
     _canonicalize_formula,
