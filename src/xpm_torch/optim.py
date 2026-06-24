@@ -1,7 +1,5 @@
-import threading
 import logging
 from typing import Any, Callable, List, Optional, TYPE_CHECKING, Union
-from pathlib import Path
 import torch
 import re
 
@@ -9,15 +7,8 @@ from experimaestro import (
     Config,
     Param,
     Constant,
-    tagspath,
-    Task,
-    experiment,
-    RunMode,
     field,
 )
-from experimaestro.scheduler import Job, Listener
-from experimaestro.utils import cleanupdir
-from experimaestro.scheduler.services import WebService
 
 from xpm_torch.utils.logging import LazyJoin
 from xpm_torch.context import Hook, Context
@@ -25,6 +16,13 @@ from xpm_torch.utils.utils import foreach
 from xpm_torch.metrics import ScalarMetric
 from .schedulers import Scheduler
 from .module import Module, ModuleLoader as ModuleLoader
+
+# Backwards-compatibility re-export: the TensorBoard service moved to the
+# ``xpm-mlboard`` package. Kept so existing ``from xpm_torch.optim import
+# TensorboardService`` imports in downstream projects keep working.
+from xpm_mlboard.backends.tensorboard import (  # noqa: E402
+    TensorboardService as TensorboardService,
+)
 
 if TYPE_CHECKING:
     from xpm_torch.trainers import TrainerContext
@@ -244,10 +242,8 @@ class GradientClippingHook(GradientHook):
         # torch.nn.utils.clip_grad_norm_(main.module.parameters(), self.max_norm)
         for optimizer in main.optimizers:
             main.trainer_context.fabric.clip_gradients(
-                main.module,
-                optimizer,
-                max_norm=self.max_norm
-                )
+                main.module, optimizer, max_norm=self.max_norm
+            )
 
 
 class GradientLogHook(GradientHook):
@@ -264,9 +260,9 @@ class GradientLogHook(GradientHook):
                     n_params += param.grad.numel()
                     sum_norms += param.grad.numel() * param.grad.norm() ** 2
 
-        assert (
-            n_params > 0
-        ), "No parameters with gradients found for logging the gradient norm"
+        assert n_params > 0, (
+            "No parameters with gradients found for logging the gradient norm"
+        )
         main.trainer_context.writer.add_scalar(
             self.name, sum_norms / n_params, main.trainer_context.state.step
         )
@@ -391,7 +387,7 @@ class ScheduledOptimizer:
             if scheduler is not None:
                 for p_ix, lr in enumerate(scheduler.get_last_lr()):
                     context.add_metric(
-                        ScalarMetric(f"gradient/scheduler/{ix+1}/{p_ix+1}", lr, 1)
+                        ScalarMetric(f"gradient/scheduler/{ix + 1}/{p_ix + 1}", lr, 1)
                     )
                 scheduler.step()
         self.scheduler_steps += 1
@@ -410,89 +406,3 @@ def get_optimizers(optimizers: Optimizers):
         return [optimizers]
 
     return [ParameterOptimizer(optimizer=optimizers)]
-
-
-class TensorboardServiceListener(Listener):
-    def __init__(self, source: Path, target: Path):
-        self.source = source
-        self.target = target
-
-    def job_state(self, job: Job):
-        if not job.state.notstarted():
-            if not self.source.is_symlink():
-                try:
-                    self.source.symlink_to(self.target)
-                except Exception:
-                    logger.exception(
-                        "Cannot symlink %s to %s", self.source, self.target
-                    )
-
-
-class TensorboardService(WebService):
-    id = "tensorboard"
-
-    def __init__(self, xp: experiment, path: Path):
-        super().__init__()
-
-        self.path = path
-        self.url = None
-        self.run_mode = xp.run_mode
-
-        if self.run_mode == RunMode.NORMAL:
-            cleanupdir(self.path)
-            self.path.mkdir(exist_ok=True, parents=True)
-            logger.info("You can monitor learning with:")
-            logger.info("tensorboard --logdir=%s", self.path)
-
-    def add(self, task: Task, path: Path):
-        # Wait until config has started
-        if self.run_mode == RunMode.NORMAL:
-            if job := task.__xpm__.job:
-                if job.scheduler is not None:
-                    tag_path = tagspath(task)
-                    if tag_path:
-                        job.scheduler.addlistener(
-                            TensorboardServiceListener(self.path / tag_path, path)
-                        )
-                    else:
-                        logger.error(
-                            "The task is not associated with tags: "
-                            "cannot link to tensorboard data"
-                        )
-                else:
-                    logger.debug("No scheduler: not adding the tensorboard data")
-            else:
-                logger.error(
-                    "Task was not started: cannot link to tensorboard job path"
-                )
-
-    def description(self):
-        return "Tensorboard service"
-
-    def close(self):
-        if self.server and self.run_mode == RunMode.NORMAL:
-            self.server.shutdown()
-
-    def _serve(self, running: threading.Event):
-        if self.run_mode != RunMode.NORMAL:
-            return
-
-        import tensorboard as tb
-
-        try:
-            logger.info("Starting %s service", self.id)
-            self.program = tb.program.TensorBoard()
-            self.program.configure(
-                host="localhost",
-                logdir=str(self.path.absolute()),
-                path_prefix=f"/services/{self.id}",
-                port=0,
-            )
-            self.server = self.program._make_server()
-
-            self.url = self.server.get_url()
-            running.set()
-            self.server.serve_forever()
-        except Exception:
-            logger.exception("Error while starting tensorboard")
-            running.set()
