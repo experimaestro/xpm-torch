@@ -40,6 +40,7 @@ from xpm_torch.trainers.context import (
 from xpm_torch.trainers import Trainer
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -159,9 +160,10 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
 
-    fabric_config: Param[FabricConfiguration] = field(default_factory=FabricConfiguration.C)
+    fabric_config: Param[FabricConfiguration] = field(
+        default_factory=FabricConfiguration.C
+    )
     """Runtime configuration, managed by Fabric"""
-
 
     def __validate__(self):
         assert self.optimizers, "At least one optimizer should be defined"
@@ -173,9 +175,7 @@ class Learner(Task, EasyLogger):
     def __submit__(self, dep, add_action):
         """Submit the learner task and register export actions."""
         learned_model = dep(
-            self.model.loader_config(
-                self.last_checkpoint_path / TrainState.MODEL_DIR
-            )
+            self.model.loader_config(self.last_checkpoint_path / TrainState.MODEL_DIR)
         )
 
         # Register export action — the model controls the action type
@@ -259,8 +259,6 @@ class Learner(Task, EasyLogger):
 
         for listener in self.listeners:
             listener.initialize(self, self.context)
-
-
 
         num_training_steps = self.max_epochs * self.steps_per_epoch
 
@@ -356,11 +354,12 @@ class Learner(Task, EasyLogger):
                 metrics = {}
                 for listener in self.listeners:
                     listener.update_metrics(metrics)
-                self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
+                self.context.metrics_logger.log_hparams(
+                    getattr(self, "__tags__", {}), metrics
+                )
 
     def iter_train(self, fabric: L.Fabric) -> Iterator[TrainState]:
-        """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps
-        """
+        """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps"""
         # Try to load a checkpoint
 
         if self.context.load_bestcheckpoint(self.max_epochs):
@@ -421,16 +420,20 @@ class Learner(Task, EasyLogger):
                         hook.after(self.context)
 
                 metrics.add(
-                    ScalarMetric("iter_per_seconds", self.steps_per_epoch / (perf_counter() - start), 1)
+                    ScalarMetric(
+                        "iter_per_seconds",
+                        self.steps_per_epoch / (perf_counter() - start),
+                        1,
+                    )
                 )
                 # Yields the current state (after one epoch)
                 # -> allows listeners to process it and decide whether to stop or not
                 yield self.context.state
 
-                # Report metrics over the epoch, and log them in tensorboard
+                # Report metrics over the epoch, and log them to the monitoring backend
                 # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
                 metrics.report(
                     self.context.state.step,
-                    self.context.writer,
+                    self.context.metrics_logger,
                     "train",
                 )

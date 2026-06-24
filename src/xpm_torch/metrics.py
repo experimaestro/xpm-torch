@@ -1,6 +1,35 @@
-from typing import Dict
+from typing import Dict, Mapping
+import abc
 import logging
-from torch.utils.tensorboard.writer import SummaryWriter
+
+
+class MetricsLogger(abc.ABC):
+    """Backend-agnostic sink for scalar metrics.
+
+    Concrete implementations forward metrics to a visualization backend
+    (TensorBoard, Weights & Biases, ...). Decoupling metric production from any
+    specific backend lets the monitoring backend be swapped without touching the
+    training loop. See :mod:`xpm_torch.loggers` for implementations.
+    """
+
+    @abc.abstractmethod
+    def log_scalar(self, tag: str, value: float, step: int) -> None:
+        """Log a single scalar ``value`` for ``tag`` at the given ``step``."""
+        ...
+
+    def log_scalars(self, values: Mapping[str, float], step: int) -> None:
+        """Log several scalars at once (defaults to repeated :meth:`log_scalar`)."""
+        for tag, value in values.items():
+            self.log_scalar(tag, value, step)
+
+    def log_hparams(
+        self, hparams: Mapping[str, object], metrics: Mapping[str, float]
+    ) -> None:
+        """Record hyper-parameters and their final metrics (optional, no-op by
+        default). Called once at the end of training."""
+
+    def close(self) -> None:
+        """Flush and release backend resources (optional, no-op by default)."""
 
 
 class Metric:
@@ -23,7 +52,7 @@ class Metric:
     def _merge(self, other: "Metric"):
         raise NotImplementedError(f"_merge in {self.__class__}")
 
-    def report(self, epoch: int, writer: SummaryWriter, prefix: str):
+    def report(self, step: int, logger: MetricsLogger, prefix: str):
         raise NotImplementedError(f"report in {self.__class__}")
 
 
@@ -43,14 +72,10 @@ class ScalarMetric(Metric):
     def compute(self):
         return self.sum / self.count
 
-    def report(self, step: int, writer: SummaryWriter, prefix: str):
+    def report(self, step: int, logger: MetricsLogger, prefix: str):
         if self.count == 0:
             logging.warning("Count is 0 when reporting metrics")
-        writer.add_scalar(
-            f"{prefix}/{self.key}",
-            self.sum / self.count,
-            step,
-        )
+        logger.log_scalar(f"{prefix}/{self.key}", self.sum / self.count, step)
 
 
 class Metrics:
@@ -70,6 +95,6 @@ class Metrics:
         for value in other.metrics.values():
             self.add(value)
 
-    def report(self, epoch, writer, prefix):
+    def report(self, step, logger: MetricsLogger, prefix):
         for value in self.metrics.values():
-            value.report(epoch, writer, prefix)
+            value.report(step, logger, prefix)

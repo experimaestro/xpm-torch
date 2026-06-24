@@ -55,9 +55,9 @@ class TrainerValidationLoss(LearnerListener):
     Should be a multiple of validation_interval or 0 (no early stopping)"""
 
     def __validate__(self):
-        assert (
-            self.early_stop % self.validation_interval == 0
-        ), "Early stop should be a multiple of the validation interval"
+        assert self.early_stop % self.validation_interval == 0, (
+            "Early stop should be a multiple of the validation interval"
+        )
 
     def initialize(self, learner: Learner, context: TrainerContext):
         super().initialize(learner, context)
@@ -145,7 +145,7 @@ class TrainerValidationLoss(LearnerListener):
                         batch, self.reducer, metrics, raise_oom=False
                     )
 
-            metrics.report(state.step, self.context.writer, self.id)
+            metrics.report(state.step, self.context.metrics_logger, self.id)
 
             # Get the current value
             if len(metrics.metrics) == 1:
