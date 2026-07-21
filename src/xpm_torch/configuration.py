@@ -91,6 +91,7 @@ class FabricConfiguration(FabricConfigurationBase):
             devices=self.devices,
             strategy=self.strategy,
             num_nodes=self.num_nodes,
+            precision=self.precision,
             **kwargs
         )
         logging.info(f"Using Fabric with accelerator={fabric.accelerator.__class__.__name__}, devices={fabric.world_size}, strategy={fabric.strategy.__class__.__name__}")

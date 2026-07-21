@@ -282,6 +282,19 @@ class Learner(Task, EasyLogger):
         self.model, *self.optimizer.optimizers = fabric.setup(
             self.model, *self.optimizer.optimizers
         )
+        
+        # Propagate the Fabric-wrapped model back to the state and trainer
+        # so that training loops automatically use the wrapped forward pass.
+        # We use a private attribute `_fabric_model` to prevent Experimaestro 
+        # `Param` descriptors from stripping the PyTorch proxy wrapper!
+        self.context.state._fabric_model = self.model
+        if self.trainer is not None:
+            self.trainer._fabric_model = self.model
+            
+        # Also attempt standard assignment for compatibility
+        self.context.state.model = self.model
+        if getattr(self.trainer, "model", None) is not None:
+            self.trainer.model = self.model
 
         self.logger.info(
             f"Model is on device {self.model.device} using dtype {next(self.model.parameters()).dtype}"
