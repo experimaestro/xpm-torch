@@ -342,14 +342,19 @@ class ModuleContainer(nn.Module):
             return
 
         for name, module in modules_to_wrap.items():
-            # Wrap the module and re-assign it
-            wrapped = fabric.setup(module)
+            # Skip if already wrapped by Fabric
+            if not type(module).__name__ == "_FabricModule":
+                # Wrap the module and re-assign it
+                wrapped = fabric.setup(module)
 
-            for method_name in module.get_forward_methods():
-                wrapped.mark_forward_method(method_name)
+                for method_name in module.get_forward_methods():
+                    wrapped.mark_forward_method(method_name)
 
-            setattr(self, name, wrapped)
-            logger.info(f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}")
+                setattr(self, name, wrapped)
+                logger.info(f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}")
+            else:
+                logger.debug(f"{name} is already wrapped by Fabric. Skipping.")
+            
 
 
 def find_module_attributes(obj) -> dict:

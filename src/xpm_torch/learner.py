@@ -58,6 +58,56 @@ class LearnerListenerStatus(Enum):
         return LearnerListenerStatus(max(self.value, other.value))
 
 
+class UpdateModelHook(InitializationHook):
+    """
+    A generalized hook that executes exactly once after the Learner has wrapped its model.
+    It traverses a target object tree and replaces all occurrences of the unwrapped model
+    with the true Fabric-wrapped model. Optionally, it can also inject the Fabric instance.
+    """
+    def __init__(self, target_obj, unwrapped_model, fabric=None):
+        self.target_obj = target_obj
+        self.unwrapped_model = unwrapped_model
+        self.fabric = fabric
+
+    def _swap_model(self, obj, wrapped_model, visited=None):
+        if visited is None:
+            visited = set()
+        
+        # Prevent infinite recursion on cyclic references
+        if id(obj) in visited:
+            return
+        visited.add(id(obj))
+        
+        # 1. Update direct references to the model
+        for attr in ["scorer", "model", "retriever"]:
+            if getattr(obj, attr, None) is self.unwrapped_model:
+                setattr(obj, attr, wrapped_model)
+                if self.fabric is not None:
+                    # Inject fabric so components like TwoStageRetriever can autocast
+                    try:
+                        setattr(obj, "fabric", self.fabric)
+                    except Exception:
+                        pass
+            
+        # 2. Recurse down children to support nested component trees
+        if hasattr(obj, "named_children"):
+            for _, child in obj.named_children():
+                self._swap_model(child, wrapped_model, visited)
+        
+        # Also check experimaestro config values if it's a Config object
+        if hasattr(obj, "__fields__"):
+            for field_name in obj.__fields__:
+                field_val = getattr(obj, field_name, None)
+                if field_val is not None and not isinstance(field_val, (str, int, float, bool, dict, list)):
+                    self._swap_model(field_val, wrapped_model, visited)
+
+    def after(self, context):
+        # Fetch the definitively wrapped model from the training state
+        wrapped_model = getattr(context.state, "_fabric_model", getattr(context.state, "model", None))
+        if wrapped_model is not None and wrapped_model is not self.unwrapped_model:
+            self._swap_model(self.target_obj, wrapped_model)
+
+
 class CheckpointSettings(Config):
     """Settings for a checkpoint-specific ModuleLoader."""
 
