@@ -76,6 +76,19 @@ class FabricConfiguration(FabricConfigurationBase):
             return None
 
         self.is_built = True
+        if self.precision and "bf16" in str(self.precision).lower():
+            if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
+                device_name = (
+                    torch.cuda.get_device_name(0)
+                    if torch.cuda.device_count() > 0
+                    else "CUDA device"
+                )
+                logger.warning(
+                    f"bfloat16 precision ('{self.precision}') requested, but GPU ({device_name}) "
+                    f"lacks native bfloat16 hardware instructions (Volta/Turing architecture, e.g. V100). "
+                    f"This will cause software emulation slowdowns. Consider using '16-mixed' (FP16) or '32-true' on V100 GPUs."
+                )
+
         if self.torch_fp32_precision is None:
             #auto set torch.float32 precision based on fabric precision (if not set explicitly)
             if self.precision in ["16-mixed", "bf16-mixed"]:
