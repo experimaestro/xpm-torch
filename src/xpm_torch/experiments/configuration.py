@@ -124,9 +124,13 @@ class Fabric:
     accelerator: str = "auto"
     """ Accelerator to use """
 
+    devices: str = "auto"
+    """ Devices to use """
+
     def get_config(self):
         return FabricConfiguration.C(
                     strategy=self.strategy,
                     precision=self.precision,
                     accelerator=self.accelerator,
+                    devices=self.devices,
                 )

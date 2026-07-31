@@ -88,7 +88,7 @@ class TrainState:
             json.dump(self.state_dict(), fp)
 
         model_dir = path / self.MODEL_DIR
-        model_dir.mkdir()
+        model_dir.mkdir(parents=True)
         self.model.save_model(model_dir)
         torch.save(self.trainer.state_dict(), path / "trainer.pth")
         torch.save(self.optimizer.state_dict(), path / "optimizer.pth")
@@ -201,8 +201,21 @@ class TrainerContext(Context):
         self._scope = []
         self._losses = None
         self.fabric = fabric
-
         self.state = TrainState(model, trainer, optimizer)
+
+    def get_local_batch_size(self, global_batch_size: int) -> int:
+        """Returns local batch size for the current process, dividing by world size if in DDP."""
+        if self.fabric and self.fabric.world_size > 1:
+            local_bs = max(1, global_batch_size // self.fabric.world_size)
+            if self.fabric.is_global_zero and not getattr(self, "_logged_ddp_bs", False):
+                logger.info(
+                    f"DDP active (world size = {self.fabric.world_size}): "
+                    f"setting local batch size to {local_bs} "
+                    f"(global batch size: {global_batch_size})"
+                )
+                self._logged_ddp_bs = True
+            return local_bs
+        return global_batch_size
 
     @property
     def writer(self):
@@ -210,7 +223,13 @@ class TrainerContext(Context):
 
         by default, purges the entries beside the current epoch
         """
+        if not self.is_global_zero():
+            return None
+
         if self._writer is None:
+            logger.info(
+                f"[TrainerContext] Initializing SummaryWriter at logpath='{self.logpath}' (rank 0)"
+            )
             self._writer = SummaryWriter(self.logpath, purge_step=self.state.step)
         return self._writer
 
@@ -262,7 +281,15 @@ class TrainerContext(Context):
     def get_checkpoint_path(checkpointspath: Path, epoch: int) -> Path:
         return checkpointspath / f"{TrainerContext.PREFIX}{epoch:08d}"
 
+    def is_global_zero(self) -> bool:
+        if self.fabric is not None:
+            return self.fabric.is_global_zero
+        return True
+
     def save_checkpoint(self):
+        if not self.is_global_zero():
+            return
+
         # Serialize
         path = TrainerContext.get_checkpoint_path(self.path, self.epoch)
         if self.state.path is not None:
@@ -284,6 +311,9 @@ class TrainerContext(Context):
 
     def copy(self, path: Path):
         """Copy the state into another folder"""
+        if not self.is_global_zero():
+            return
+
         if self.state.path is None:
             self.save_checkpoint()
 

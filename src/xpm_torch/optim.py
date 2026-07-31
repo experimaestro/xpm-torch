@@ -267,9 +267,10 @@ class GradientLogHook(GradientHook):
         assert (
             n_params > 0
         ), "No parameters with gradients found for logging the gradient norm"
-        main.trainer_context.writer.add_scalar(
-            self.name, sum_norms / n_params, main.trainer_context.state.step
-        )
+        if main.trainer_context and main.trainer_context.writer is not None:
+            main.trainer_context.writer.add_scalar(
+                self.name, sum_norms / n_params, main.trainer_context.state.step
+            )
 
 
 class ScheduledOptimizer:

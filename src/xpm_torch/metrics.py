@@ -44,6 +44,8 @@ class ScalarMetric(Metric):
         return self.sum / self.count
 
     def report(self, step: int, writer: SummaryWriter, prefix: str):
+        if writer is None:
+            return
         if self.count == 0:
             logging.warning("Count is 0 when reporting metrics")
         writer.add_scalar(

@@ -99,10 +99,33 @@ class FabricConfiguration(FabricConfigurationBase):
 
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
+        strategy = self.strategy
+        num_devices = 1
+        if isinstance(self.devices, list):
+            num_devices = len(self.devices)
+        elif isinstance(self.devices, int):
+            num_devices = self.devices
+        elif isinstance(self.devices, str):
+            if self.devices.isdigit():
+                num_devices = int(self.devices)
+            elif self.devices == "auto" and torch.cuda.is_available():
+                num_devices = torch.cuda.device_count()
+
+        if (num_devices > 1 or self.num_nodes > 1) and strategy in (None, "auto", "ddp"):
+            strategy = "ddp_find_unused_parameters_true"
+            logger.info(
+                f"[Fabric] Multi-device training detected ({num_devices} devices). "
+                f"Resolved strategy '{self.strategy}' to '{strategy}'."
+            )
+
+        if isinstance(strategy, str) and "ddp" in strategy.lower():
+            if hasattr(torch.autograd.graph, "set_warn_on_accumulate_grad_stream_mismatch"):
+                torch.autograd.graph.set_warn_on_accumulate_grad_stream_mismatch(False)
+
         fabric = L.Fabric(
             accelerator=self.accelerator,
             devices=self.devices,
-            strategy=self.strategy,
+            strategy=strategy,
             num_nodes=self.num_nodes,
             precision=self.precision,
             **kwargs

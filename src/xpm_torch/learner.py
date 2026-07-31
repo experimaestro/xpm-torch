@@ -305,7 +305,9 @@ class Learner(Task, EasyLogger):
 
         # Wrap dataloader with Fabric for device placement (if using new path)
         if hasattr(self.trainer, "dataloader") and self.trainer.dataloader is not None:
-            self.trainer.dataloader = fabric.setup_dataloaders(self.trainer.dataloader)
+            self.trainer.dataloader = fabric.setup_dataloaders(
+                self.trainer.dataloader
+            )
 
         for listener in self.listeners:
             listener.initialize(self, self.context)
@@ -387,15 +389,24 @@ class Learner(Task, EasyLogger):
                     continue
 
                 if not state.cached and state.epoch % self.checkpoint_interval == 0:
-                    # Save checkpoint if needed
-                    self.context.save_checkpoint()
-                    self.context.copy(self.last_checkpoint_path)
+                    # Save checkpoint on rank 0 and barrier all ranks
+                    if fabric.is_global_zero:
+                        self.context.save_checkpoint()
+                        self.context.copy(self.last_checkpoint_path)
+                    fabric.barrier()
 
                 # Call listeners
                 decision = LearnerListenerStatus.NO_DECISION
                 for listener in self.listeners:
-                    # listener.__call__ returns True if we should stop
+                    # listener.__call__ returns LearnerListenerStatus
                     decision = decision.update(listener(state))
+
+                # Synchronize decision across DDP ranks so all ranks reach identical stopping decision
+                if fabric.world_size > 1:
+                    decision_val = torch.tensor([decision.value], device=fabric.device)
+                    fabric.broadcast(decision_val, src=0)
+                    decision = LearnerListenerStatus(decision_val.item())
+                    fabric.barrier()
 
                 if decision == LearnerListenerStatus.STOP:
                     self.logger.warning(
@@ -415,11 +426,14 @@ class Learner(Task, EasyLogger):
 
             # End of the learning process
             if state is not None and not state.cached:
-                # Set the hyper-parameters
-                metrics = {}
-                for listener in self.listeners:
-                    listener.update_metrics(metrics)
-                self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
+                if fabric.is_global_zero:
+                    # Set the hyper-parameters
+                    metrics = {}
+                    for listener in self.listeners:
+                        listener.update_metrics(metrics)
+                    if self.context.writer is not None:
+                        self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
+                fabric.barrier()
 
     def iter_train(self, fabric: L.Fabric) -> Iterator[TrainState]:
         """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps
