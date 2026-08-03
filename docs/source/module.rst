@@ -15,6 +15,14 @@ Core
 .. autoclass:: xpm_torch.module.ModuleContainer
    :members:
 
+Fabric & Precision Setup Helpers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: xpm_torch.module.is_16bit_precision
+
+.. autofunction:: xpm_torch.module.fallback_fa2_if_incompatible_precision
+
+
 Base Classes
 ------------
 

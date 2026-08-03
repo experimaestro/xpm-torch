@@ -38,6 +38,7 @@ from xpm_torch.trainers.context import (
     TrainerContext,
 )
 from xpm_torch.trainers import Trainer
+from xpm_torch.module import fallback_fa2_if_incompatible_precision
 
 import logging
 logger = logging.getLogger(__name__)
@@ -330,10 +331,19 @@ class Learner(Task, EasyLogger):
         # run after the optimizer is initialized and before fabric.setup(model).
         self.trainer.pre_train_setup(fabric)
 
-        # wrap model and optimizers
-        self.model, *self.optimizer.optimizers = fabric.setup(
-            self.model, *self.optimizer.optimizers
+        # Setup model and optimizers with Fabric
+        self.model = self.model.setup_with_fabric(fabric)
+        self.logger.info(
+            f"[Learner] Model setup via setup_with_fabric completed (type: {type(self.model).__name__})"
         )
+
+
+
+
+        if self.optimizer.optimizers:
+            self.optimizer.optimizers = list(fabric.setup_optimizers(*self.optimizer.optimizers))
+        else:
+            self.logger.error("No optimizers were initialized; training will not update model parameters.")
         
         # Propagate the Fabric-wrapped model back to the state and trainer
         # so that training loops automatically use the wrapped forward pass.

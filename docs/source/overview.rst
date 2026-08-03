@@ -23,15 +23,22 @@ with ``torch.nn.Module`` (parameters, forward pass, device management).
   safetensors via :meth:`~xpm_torch.module.Module.save_model` /
   :meth:`~xpm_torch.module.Module.load_model`. Subclasses override
   :meth:`~xpm_torch.module.Module.loader_config` to control how the model
-  is loaded from a checkpoint.
+  is loaded from a checkpoint. Returns ``["save_model", "load_model"]`` in
+  :meth:`~xpm_torch.module.Module.get_forward_methods` to register extra methods
+  with Lightning Fabric via ``mark_forward_method``. Subclasses extending
+  forward methods must append to ``super().get_forward_methods()``. Defines
+  :meth:`~xpm_torch.module.Module.setup_with_fabric` to handle precision-aware
+  Fabric setup (inspecting ``fabric.precision`` to automatically fall back
+  FlashAttention-2 to SDPA under FP32, and registering forward methods).
 
 - :class:`~xpm_torch.module.ModuleLoader` — Lightweight task that initializes
   a model and loads its weights from a checkpoint directory. Produced by
   :meth:`Module.loader_config(path) <xpm_torch.module.Module.loader_config>`.
 
-- :class:`~xpm_torch.module.ModuleContainer` — A plain ``nn.Module`` container
-  that auto-detects which children have state and wraps them with Lightning
-  Fabric via :meth:`~xpm_torch.module.ModuleContainer.setup_with_fabric`.
+- :class:`~xpm_torch.module.ModuleContainer` — A container for stateful
+  child modules that auto-detects parameters/buffers and sets up stateful
+  children with Lightning Fabric via :meth:`~xpm_torch.module.ModuleContainer.setup_with_fabric`.
+
 
 See :doc:`module` for the full API reference.
 

@@ -3,6 +3,8 @@ from typing import (
     List,
     Dict,
     Optional,
+    Union,
+    Any,
 )
 from pathlib import Path
 import torch
@@ -54,7 +56,6 @@ class Module(Config, Initializable, nn.Module):
         Initializable.__init__(self)
         torch.nn.Module.__init__(self)
 
-
     def __initialize__(self):
         """Initialize a module (structure only, no weight loading)"""
         pass
@@ -71,9 +72,16 @@ class Module(Config, Initializable, nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def get_forward_methods(self) -> list:
-        """Returns the list of forward methods for this scorer. Needed to set up Fabric with multiple forward methods.
-        By default, it is just `forward`, but it can be extended to support multiple forward methods (e.g. for different scoring strategies)"""
-        return []
+        """Returns the list of forward method names for this module to be registered with Lightning Fabric via `mark_forward_method`.
+
+        By default, returns `["save_model", "load_model"]`. Subclasses that define additional forward methods (such as custom scoring or retrieval methods) **MUST** call `super().get_forward_methods()` and append to the returned list:
+
+        Example:
+            >>> class CustomScorer(Module):
+            ...     def get_forward_methods(self) -> list:
+            ...         return super().get_forward_methods() + ["rsv"]
+        """
+        return ["save_model", "load_model"]
 
     def save_model(self, path: Path):
         """Save model parameters to a directory or a file using safetensors.
@@ -82,6 +90,7 @@ class Module(Config, Initializable, nn.Module):
         Otherwise, it creates a directory and saves as 'model.safetensors' inside.
         """
         from safetensors.torch import save_file
+
         if path.suffix == ".safetensors":
             path.parent.mkdir(parents=True, exist_ok=True)
             save_file(self.state_dict(), str(path))
@@ -93,12 +102,33 @@ class Module(Config, Initializable, nn.Module):
         """Load model parameters from a directory or a file."""
         from safetensors.torch import load_file
 
-        if path.is_file():
+        if path.suffix == ".safetensors":
             self.load_state_dict(load_file(str(path)))
-        elif (path / "model.safetensors").exists():
-            self.load_state_dict(load_file(str(path / "model.safetensors")))
         else:
-            raise FileNotFoundError(f"Could not find model weights at {path}")
+            self.load_state_dict(load_file(str(path / "model.safetensors")))
+
+    def setup_with_fabric(self, fabric) -> nn.Module:
+        """Sets up this module with PyTorch Lightning Fabric.
+
+        1. Inspects Fabric precision and falls back FlashAttention-2 to SDPA if running under FP32.
+        2. Wraps the module with `fabric.setup(self)`.
+        3. Automatically registers forward methods returned by `get_forward_methods()` via `mark_forward_method`.
+
+        Args:
+            fabric: The PyTorch Lightning Fabric instance.
+
+        Returns:
+            nn.Module: The Fabric-wrapped module proxy (or self if already wrapped).
+        """
+        self.fabric = fabric
+        
+        if not type(self).__name__ == "_FabricModule":
+            wrapped = fabric.setup(self)
+            for method_name in self.get_forward_methods():
+                if hasattr(self, method_name):
+                    wrapped.mark_forward_method(method_name)
+            return wrapped
+        return self
 
     def loader_config(
         self, path: Path, *, settings: Optional[Config] = None
@@ -272,7 +302,9 @@ class SimpleModuleLoader(ModuleLoader):
 
         # Ensure path exists and is not the current directory (resolved from empty string)
         if not path.exists() or path.resolve() == Path.cwd().resolve():
-            raise FileNotFoundError(f"Cannot serialize SimpleModuleLoader: path '{self.path}' does not exist or is the current directory")
+            raise FileNotFoundError(
+                f"Cannot serialize SimpleModuleLoader: path '{self.path}' does not exist or is the current directory"
+            )
 
         # If it's a directory, point to the file inside it so it gets
         # serialized as a file instead of a directory
@@ -280,9 +312,11 @@ class SimpleModuleLoader(ModuleLoader):
             path = path / "model.safetensors"
 
         # Serialize the 'path' field under the name "model.safetensors"
-        return {"path": context.serialize(
-            context.var_path + ["model.safetensors"], path, self
-        )}
+        return {
+            "path": context.serialize(
+                context.var_path + ["model.safetensors"], path, self
+            )
+        }
 
     def execute(self):
         """Loads the model from disk using the given serialization path"""
@@ -330,7 +364,7 @@ class ModuleContainer(nn.Module):
 
         return manageable
 
-    def setup_with_fabric(self, fabric) -> None:
+    def setup_with_fabric(self, fabric) -> "ModuleContainer":
         """
         Self-identifies which children need Fabric wrapping.
         """
@@ -339,22 +373,28 @@ class ModuleContainer(nn.Module):
 
         if not modules_to_wrap:
             logger.debug("No stateful modules found. Skipping Fabric setup.")
-            return
+            return self
 
         for name, module in modules_to_wrap.items():
             # Skip if already wrapped by Fabric
             if not type(module).__name__ == "_FabricModule":
-                # Wrap the module and re-assign it
-                wrapped = fabric.setup(module)
-
-                for method_name in module.get_forward_methods():
-                    wrapped.mark_forward_method(method_name)
-
+                wrapped = module.setup_with_fabric(fabric)
                 setattr(self, name, wrapped)
-                logger.info(f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}")
+                logger.info(
+                    f"Registered {name} (type: {type(module).__name__}) with Fabric on {fabric.device}"
+                )
             else:
                 logger.debug(f"{name} is already wrapped by Fabric. Skipping.")
-            
+
+        return self
+
+
+
+from xpm_torch.utils.fabric import (
+    get_fabric_precision,
+    is_16bit_precision,
+    fallback_fa2_if_incompatible_precision,
+)
 
 
 def find_module_attributes(obj) -> dict:

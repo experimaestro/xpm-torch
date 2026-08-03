@@ -20,7 +20,6 @@ from xpm_torch.context import InitializationHook, Hook, Context
 from xpm_torch.metrics import Metric, Metrics
 from xpm_torch.losses import Loss
 
-
 if TYPE_CHECKING:
     from xpm_torch.learner import ScheduledOptimizer, Module
     from xpm_torch.trainers import Trainer
@@ -89,7 +88,13 @@ class TrainState:
 
         model_dir = path / self.MODEL_DIR
         model_dir.mkdir(parents=True)
-        self.model.save_model(model_dir)
+
+        unwrapped_model = getattr(self.model, "_original_module", self.model)
+        if hasattr(unwrapped_model, "save_model"):
+            unwrapped_model.save_model(model_dir)
+        else:
+            self.model.save_model(model_dir)
+
         torch.save(self.trainer.state_dict(), path / "trainer.pth")
         torch.save(self.optimizer.state_dict(), path / "optimizer.pth")
 
@@ -100,11 +105,17 @@ class TrainState:
         if not onlyinfo:
             model_dir = path / self.MODEL_DIR
             if model_dir.exists():
-                self.model.load_model(model_dir)
+                unwrapped_model = getattr(self.model, "_original_module", self.model)
+                if hasattr(unwrapped_model, "load_model"):
+                    unwrapped_model.load_model(model_dir)
+                else:
+                    self.model.load_model(model_dir)
             else:
                 # Backward compat: load from legacy model.pth
                 self.model.load_state_dict(
-                    torch.load(path / self.MODEL_PATH, map_location="cpu", weights_only=True)
+                    torch.load(
+                        path / self.MODEL_PATH, map_location="cpu", weights_only=True
+                    )
                 )
             self.trainer.load_state_dict(torch.load(path / "trainer.pth"))
             self.optimizer.load_state_dict(torch.load(path / "optimizer.pth"))
@@ -161,6 +172,7 @@ class InitializationTrainingHook(TrainingHook, InitializationHook):
     def before(self, state: "TrainerContext"):
         pass
 
+
 class TrainerContext(Context):
     """Contains all the information about the training context
     for a spefic
@@ -207,7 +219,9 @@ class TrainerContext(Context):
         """Returns local batch size for the current process, dividing by world size if in DDP."""
         if self.fabric and self.fabric.world_size > 1:
             local_bs = max(1, global_batch_size // self.fabric.world_size)
-            if self.fabric.is_global_zero and not getattr(self, "_logged_ddp_bs", False):
+            if self.fabric.is_global_zero and not getattr(
+                self, "_logged_ddp_bs", False
+            ):
                 logger.info(
                     f"DDP active (world size = {self.fabric.world_size}): "
                     f"setting local batch size to {local_bs} "
@@ -360,7 +374,7 @@ class TrainerContext(Context):
     def add_metric(self, metric: Metric):
         """
         add a metric to be reported at the end of the step (e.g., for logging in tensorboard)
-        
+
         :param metric: The metric to be added
         :type metric: Metric
         """
