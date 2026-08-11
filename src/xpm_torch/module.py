@@ -306,15 +306,25 @@ class SimpleModuleLoader(ModuleLoader):
                 f"Cannot serialize SimpleModuleLoader: path '{self.path}' does not exist or is the current directory"
             )
 
-        # If it's a directory, point to the file inside it so it gets
-        # serialized as a file instead of a directory
-        if path.is_dir() and (path / "model.safetensors").exists():
-            path = path / "model.safetensors"
+        target_name = path.name if path.is_file() else "model.safetensors"
 
-        # Serialize the 'path' field under the name "model.safetensors"
+        # If it's a directory, point to the weights file inside it so it gets
+        # serialized as a file instead of a directory
+        if path.is_dir():
+            if (path / "model.safetensors").is_file():
+                path = path / "model.safetensors"
+                target_name = "model.safetensors"
+            elif (path / "pytorch_model.bin").is_file():
+                path = path / "pytorch_model.bin"
+                target_name = "pytorch_model.bin"
+            elif (path / "model" / "model.safetensors").is_file():
+                path = path / "model" / "model.safetensors"
+                target_name = "model.safetensors"
+
+        # Serialize the 'path' field under target_name
         return {
             "path": context.serialize(
-                context.var_path + ["model.safetensors"], path, self
+                context.var_path + [target_name], path, self
             )
         }
 
