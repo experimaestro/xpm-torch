@@ -285,6 +285,13 @@ class ModuleLoader(SerializationLWTask):
     def execute(self):
         raise NotImplementedError("Subclasses must implement execute()")
 
+    def export_action(self, loader=None, **kwargs):
+        """Returns an ExportAction config for this loader."""
+        from xpm_torch.actions import ExportAction
+
+        loader = self if loader is None else loader
+        return ExportAction.C(loader=loader, **kwargs)
+
 
 class SimpleModuleLoader(ModuleLoader):
     """Default ModuleLoader with a single ``path`` DataPath.
