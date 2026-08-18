@@ -1,3 +1,4 @@
+from typing import Optional
 from torch.optim.lr_scheduler import LambdaLR
 from experimaestro import field, Config, Param
 
@@ -39,6 +40,45 @@ class LinearWithWarmup(Scheduler):
             lambda current_step: self.lr_lambda(current_step, num_training_steps),
             last_epoch=last_epoch,
         )
+
+
+class LinearWithWarmupAndMaxEpochs(Scheduler):
+    """Linear warmup followed by linear decay calculated over an explicit total_training_steps"""
+
+    num_warmup_steps: Param[int]
+    """Number of warmup steps"""
+
+    min_factor: Param[float] = field(default=0.0, ignore_default=True)
+    """Minimum multiplicative factor"""
+
+    total_training_steps: Param[Optional[int]] = field(
+        default=None, ignore_default=True
+    )
+    """Total training steps to compute schedule over (overrides Learner's num_training_steps if provided)"""
+
+    def lr_lambda(self, current_step: int, num_training_steps: int):
+        if current_step < self.num_warmup_steps:
+            return float(current_step) / float(max(1, self.num_warmup_steps))
+
+        factor = max(
+            0.0,
+            float(num_training_steps - current_step)
+            / float(max(1, num_training_steps - self.num_warmup_steps)),
+        )
+        return (factor + self.min_factor) / (1.0 + self.min_factor)
+
+    def __call__(self, optimizer, num_training_steps: int, *, last_epoch=-1, **kwargs):
+        effective_steps = (
+            self.total_training_steps
+            if self.total_training_steps is not None
+            else num_training_steps
+        )
+        return LambdaLR(
+            optimizer,
+            lambda current_step: self.lr_lambda(current_step, effective_steps),
+            last_epoch=last_epoch,
+        )
+
 
 
 class CosineWithWarmup(Scheduler):
