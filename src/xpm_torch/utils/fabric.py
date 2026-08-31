@@ -81,6 +81,15 @@ def fallback_fa2_if_incompatible_precision(
     if hasattr(module, "hf_model") and hasattr(module.hf_model, "config"):
         configs_to_check.append(module.hf_model.config)
     if (
+        hasattr(module, "hf_model")
+        and hasattr(module.hf_model, "model")
+        and hasattr(module.hf_model.model, "config")
+    ):
+        # Some models (e.g. MICE's bottom contextualization layers) build an inner
+        # submodule from a deep-copied config, which is a distinct object from
+        # hf_model.config and would otherwise silently keep using FlashAttention-2.
+        configs_to_check.append(module.hf_model.model.config)
+    if (
         hasattr(module, "st_model")
         and hasattr(module.st_model, "model")
         and hasattr(module.st_model.model, "config")
