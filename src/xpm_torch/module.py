@@ -3,8 +3,6 @@ from typing import (
     List,
     Dict,
     Optional,
-    Union,
-    Any,
 )
 from pathlib import Path
 import torch
@@ -18,6 +16,13 @@ from experimaestro import (
     SerializationLWTask,
 )
 from xpm_torch.utils.utils import Initializable
+
+from xpm_torch.utils.fabric import (
+    get_fabric_precision,
+    is_16bit_precision,
+    fallback_fa2_if_incompatible_precision,
+    is_fa2_available,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +126,7 @@ class Module(Config, Initializable, nn.Module):
             nn.Module: The Fabric-wrapped module proxy (or self if already wrapped).
         """
         self.fabric = fabric
-        
+
         if not type(self).__name__ == "_FabricModule":
             wrapped = fabric.setup(self)
             for method_name in self.get_forward_methods():
@@ -329,11 +334,7 @@ class SimpleModuleLoader(ModuleLoader):
                 target_name = "model.safetensors"
 
         # Serialize the 'path' field under target_name
-        return {
-            "path": context.serialize(
-                context.var_path + [target_name], path, self
-            )
-        }
+        return {"path": context.serialize(context.var_path + [target_name], path, self)}
 
     def execute(self):
         """Loads the model from disk using the given serialization path"""
@@ -404,14 +405,6 @@ class ModuleContainer(nn.Module):
                 logger.debug(f"{name} is already wrapped by Fabric. Skipping.")
 
         return self
-
-
-
-from xpm_torch.utils.fabric import (
-    get_fabric_precision,
-    is_16bit_precision,
-    fallback_fa2_if_incompatible_precision,
-)
 
 
 def find_module_attributes(obj) -> dict:

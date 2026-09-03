@@ -52,6 +52,42 @@ def is_16bit_precision(precision: Optional[str]) -> bool:
     return p in ("16-mixed", "bf16-mixed", "16-true", "bf16-true", "16", "bf16")
 
 
+def is_fa2_available() -> bool:
+    """Checks if FlashAttention-2 is available via flash_attn or kernels on CUDA SM 8.0+."""
+    if not torch.cuda.is_available():
+        return False
+    try:
+        major_cc, _ = torch.cuda.get_device_capability(0)
+        if major_cc < 8:
+            return False
+    except Exception:
+        return False
+
+    try:
+        from transformers.utils import is_flash_attn_2_available
+
+        if is_flash_attn_2_available():
+            return True
+    except (ImportError, Exception):
+        pass
+
+    try:
+        import kernels  # noqa: F401
+
+        return True
+    except ImportError:
+        pass
+
+    try:
+        import flash_attn  # noqa: F401
+
+        return True
+    except ImportError:
+        pass
+
+    return False
+
+
 def fallback_fa2_if_incompatible_precision(
     module: torch.nn.Module, fabric_or_precision: Union[Any, Optional[str]]
 ) -> None:
