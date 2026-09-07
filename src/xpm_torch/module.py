@@ -320,6 +320,10 @@ class SimpleModuleLoader(ModuleLoader):
 
         target_name = path.name if path.is_file() else "model.safetensors"
 
+        # If it's a SentenceTransformers directory (containing modules.json), serialize as folder
+        if path.is_dir() and (path / "modules.json").is_file():
+            return {"path": context.serialize(context.var_path, path, self)}
+
         # If it's a directory, point to the weights file inside it so it gets
         # serialized as a file instead of a directory
         if path.is_dir():
