@@ -120,6 +120,9 @@ class AdamW(Optimizer):
 class ParameterFilter(Config):
     """One abstract class which doesn't do the filtrage"""
 
+    def __repr__(self) -> str:
+        return "ParameterFilter()"
+
     def __call__(self, name, params) -> bool:
         """Returns true if the parameters should be optimized with the
         associated optimizer"""
@@ -179,7 +182,10 @@ class ParameterOptimizer(Config):
     """How parameters should be selected for this (by default, use them all)"""
 
     def create_optimizer(
-        self, module: Module, filter: Callable[[str, Any], bool]
+        self,
+        module: Module,
+        filter: Callable[[str, Any], bool],
+        log: bool = True,
     ) -> torch.optim.Optimizer:
         """Returns a (pytorch) optimizer"""
         module = self.module or module
@@ -194,11 +200,17 @@ class ParameterOptimizer(Config):
             )
             raise RuntimeError(f"Parameter list is empty with {self.filter}")
 
-        logger.debug(
-            "Optimizing with %s parameters [%s]",
-            self.filter,
-            LazyJoin(",", params.keys()),
-        )
+        if log:
+            logger.info(
+                "Optimizing with %s (%d parameters)",
+                self.filter,
+                len(params),
+            )
+            logger.debug(
+                "Parameters for %s: [%s]",
+                self.filter,
+                LazyJoin(", ", params.keys()),
+            )
         optimizer = self.optimizer(params.values())
         return optimizer
 
@@ -297,17 +309,42 @@ class ScheduledOptimizer:
         except StopIteration:
             raise RuntimeError(f"No parameters to optimize in the module {module}")
 
+        is_main = (
+            trainer_context.is_global_zero()
+            if trainer_context is not None
+            else True
+        )
+
         filter = DuplicateParameterFilter()
         for param_optimizer in param_optimizers:
-            optimizer = param_optimizer.create_optimizer(module, filter)
+            optimizer = param_optimizer.create_optimizer(module, filter, log=is_main)
             self.optimizers.append(optimizer)
             self.scheduler_factories.append(param_optimizer.scheduler)
+
+        if is_main:
+            ignored = [
+                name
+                for name, param in module.named_parameters()
+                if param not in filter.parameters
+            ]
+            if ignored:
+                logger.warning(
+                    "Ignored parameters (%d) NOT being optimized: [%s]",
+                    len(ignored),
+                    LazyJoin(", ", ignored),
+                )
+            else:
+                logger.info(
+                    "Ignored parameters: none (all %d parameters optimized across %d groups)",
+                    len(filter.parameters),
+                    len(self.optimizers),
+                )
 
         self.reset_schedulers()
 
         assert len(self.schedulers) == len(self.optimizers)
 
-        if use_scaler:
+        if use_scaler and is_main:
             logger.info("Using GradScaler when optimizing")
         self.scaler = torch.cuda.amp.GradScaler() if use_scaler else None
 
