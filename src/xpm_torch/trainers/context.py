@@ -248,6 +248,25 @@ class TrainerContext(Context):
         return self._writer
 
     @property
+    def model(self):
+        """Returns the model from the current training state."""
+        return self.state.model
+
+    @model.setter
+    def model(self, value):
+        self.state.model = value
+
+    @property
+    def trainer(self):
+        """Returns the trainer from the current training state."""
+        return self.state.trainer
+
+    @property
+    def optimizer(self):
+        """Returns the optimizer from the current training state."""
+        return self.state.optimizer
+
+    @property
     def epoch(self):
         return self.state.epoch
 
