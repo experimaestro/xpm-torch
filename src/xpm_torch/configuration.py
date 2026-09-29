@@ -76,6 +76,19 @@ class FabricConfiguration(FabricConfigurationBase):
             return None
 
         self.is_built = True
+        if self.precision and "bf16" in str(self.precision).lower():
+            if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
+                device_name = (
+                    torch.cuda.get_device_name(0)
+                    if torch.cuda.device_count() > 0
+                    else "CUDA device"
+                )
+                logger.warning(
+                    f"bfloat16 precision ('{self.precision}') requested, but GPU ({device_name}) "
+                    f"lacks native bfloat16 hardware instructions (Volta/Turing architecture, e.g. V100). "
+                    f"This will cause software emulation slowdowns. Consider using '16-mixed' (FP16) or '32-true' on V100 GPUs."
+                )
+
         if self.torch_fp32_precision is None:
             #auto set torch.float32 precision based on fabric precision (if not set explicitly)
             if self.precision in ["16-mixed", "bf16-mixed"]:
@@ -86,11 +99,35 @@ class FabricConfiguration(FabricConfigurationBase):
 
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
+        strategy = self.strategy
+        num_devices = 1
+        if isinstance(self.devices, list):
+            num_devices = len(self.devices)
+        elif isinstance(self.devices, int):
+            num_devices = self.devices
+        elif isinstance(self.devices, str):
+            if self.devices.isdigit():
+                num_devices = int(self.devices)
+            elif self.devices == "auto" and torch.cuda.is_available():
+                num_devices = torch.cuda.device_count()
+
+        if (num_devices > 1 or self.num_nodes > 1) and strategy in (None, "auto", "ddp"):
+            strategy = "ddp_find_unused_parameters_true"
+            logger.info(
+                f"[Fabric] Multi-device training detected ({num_devices} devices). "
+                f"Resolved strategy '{self.strategy}' to '{strategy}'."
+            )
+
+        if isinstance(strategy, str) and "ddp" in strategy.lower():
+            if hasattr(torch.autograd.graph, "set_warn_on_accumulate_grad_stream_mismatch"):
+                torch.autograd.graph.set_warn_on_accumulate_grad_stream_mismatch(False)
+
         fabric = L.Fabric(
             accelerator=self.accelerator,
             devices=self.devices,
-            strategy=self.strategy,
+            strategy=strategy,
             num_nodes=self.num_nodes,
+            precision=self.precision,
             **kwargs
         )
         logging.info(f"Using Fabric with accelerator={fabric.accelerator.__class__.__name__}, devices={fabric.world_size}, strategy={fabric.strategy.__class__.__name__}")

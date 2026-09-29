@@ -19,7 +19,6 @@ from xpm_torch.context import InitializationHook, Hook, Context
 from xpm_torch.metrics import Metric, Metrics, MetricsLogger
 from xpm_torch.losses import Loss
 
-
 if TYPE_CHECKING:
     from xpm_torch.learner import ScheduledOptimizer, Module
     from xpm_torch.trainers import Trainer
@@ -87,8 +86,14 @@ class TrainState:
             json.dump(self.state_dict(), fp)
 
         model_dir = path / self.MODEL_DIR
-        model_dir.mkdir()
-        self.model.save_model(model_dir)
+        model_dir.mkdir(parents=True)
+
+        unwrapped_model = getattr(self.model, "_original_module", self.model)
+        if hasattr(unwrapped_model, "save_model"):
+            unwrapped_model.save_model(model_dir)
+        else:
+            self.model.save_model(model_dir)
+
         torch.save(self.trainer.state_dict(), path / "trainer.pth")
         torch.save(self.optimizer.state_dict(), path / "optimizer.pth")
 
@@ -99,7 +104,11 @@ class TrainState:
         if not onlyinfo:
             model_dir = path / self.MODEL_DIR
             if model_dir.exists():
-                self.model.load_model(model_dir)
+                unwrapped_model = getattr(self.model, "_original_module", self.model)
+                if hasattr(unwrapped_model, "load_model"):
+                    unwrapped_model.load_model(model_dir)
+                else:
+                    self.model.load_model(model_dir)
             else:
                 # Backward compat: load from legacy model.pth
                 self.model.load_state_dict(
@@ -203,8 +212,23 @@ class TrainerContext(Context):
         self._scope = []
         self._losses = None
         self.fabric = fabric
-
         self.state = TrainState(model, trainer, optimizer)
+
+    def get_local_batch_size(self, global_batch_size: int) -> int:
+        """Returns local batch size for the current process, dividing by world size if in DDP."""
+        if self.fabric and self.fabric.world_size > 1:
+            local_bs = max(1, global_batch_size // self.fabric.world_size)
+            if self.fabric.is_global_zero and not getattr(
+                self, "_logged_ddp_bs", False
+            ):
+                logger.info(
+                    f"DDP active (world size = {self.fabric.world_size}): "
+                    f"setting local batch size to {local_bs} "
+                    f"(global batch size: {global_batch_size})"
+                )
+                self._logged_ddp_bs = True
+            return local_bs
+        return global_batch_size
 
     @property
     def metrics_logger(self) -> MetricsLogger:
@@ -215,10 +239,39 @@ class TrainerContext(Context):
         Biases) does not require importing TensorBoard.
         """
         if self._logger is None:
-            from xpm_torch.loggers import TensorboardLogger
+            if self.is_global_zero():
+                from xpm_torch.loggers import TensorboardLogger
 
-            self._logger = TensorboardLogger(self.logpath, purge_step=self.state.step)
+                logger.info(
+                    f"[TrainerContext] Initializing TensorBoard logger at logpath='{self.logpath}' (rank 0)"
+                )
+                self._logger = TensorboardLogger(
+                    self.logpath, purge_step=self.state.step
+                )
+            else:
+                from xpm_torch.loggers import NullMetricsLogger
+
+                self._logger = NullMetricsLogger()
         return self._logger
+
+    @property
+    def model(self):
+        """Returns the model from the current training state."""
+        return self.state.model
+
+    @model.setter
+    def model(self, value):
+        self.state.model = value
+
+    @property
+    def trainer(self):
+        """Returns the trainer from the current training state."""
+        return self.state.trainer
+
+    @property
+    def optimizer(self):
+        """Returns the optimizer from the current training state."""
+        return self.state.optimizer
 
     @property
     def epoch(self):
@@ -268,7 +321,15 @@ class TrainerContext(Context):
     def get_checkpoint_path(checkpointspath: Path, epoch: int) -> Path:
         return checkpointspath / f"{TrainerContext.PREFIX}{epoch:08d}"
 
+    def is_global_zero(self) -> bool:
+        if self.fabric is not None:
+            return self.fabric.is_global_zero
+        return True
+
     def save_checkpoint(self):
+        if not self.is_global_zero():
+            return
+
         # Serialize
         path = TrainerContext.get_checkpoint_path(self.path, self.epoch)
         if self.state.path is not None:
@@ -290,6 +351,9 @@ class TrainerContext(Context):
 
     def copy(self, path: Path):
         """Copy the state into another folder"""
+        if not self.is_global_zero():
+            return
+
         if self.state.path is None:
             self.save_checkpoint()
 

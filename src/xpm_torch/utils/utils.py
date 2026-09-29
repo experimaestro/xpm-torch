@@ -252,3 +252,103 @@ class Initializable:
         Parameters depend on the actual class
         """
         pass
+
+
+def count_safetensors_params(file_path: Union[str, Path]) -> int:
+    """Fast header-only parameter count for a .safetensors file.
+
+    Reads only the unsigned 8-byte header size and JSON metadata block
+    without loading weight arrays into memory.
+
+    Args:
+        file_path: Path to the .safetensors file.
+
+    Returns:
+        Total number of parameters across all tensors.
+    """
+    import json
+    import math
+    import struct
+
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Safetensors file not found at '{path}'")
+
+    with open(path, "rb") as f:
+        header_size = struct.unpack("<Q", f.read(8))[0]
+        header = json.loads(f.read(header_size).decode("utf-8"))
+
+    return sum(
+        math.prod(info["shape"])
+        for k, info in header.items()
+        if k != "__metadata__" and "shape" in info
+    )
+
+
+def format_num_params(num_params: int) -> str:
+    """Format integer parameter count into readable string (e.g. 22714113 -> '22.71M')."""
+    if num_params >= 1e9:
+        return f"{num_params / 1e9:.2f}B"
+    elif num_params >= 1e6:
+        return f"{num_params / 1e6:.2f}M"
+    elif num_params >= 1e3:
+        return f"{num_params / 1e3:.2f}K"
+    return str(num_params)
+
+
+def build_model_card(
+    save_path: Union[str, Path],
+    template_path: Union[str, Path],
+    model_name: str,
+    base_model: str,
+    language: str = "en",
+    license: str = "apache-2.0",
+    pipeline_tag: str = "text-classification",
+    **template_kwargs,
+):
+    """Build and write a Hugging Face ModelCard to README.md in save_path.
+
+    Automatically calculates parameter counts from model.safetensors if present
+    and passes total_parameters into the template context.
+    """
+    from huggingface_hub import ModelCard, ModelCardData
+
+    save_path = Path(save_path)
+    template_path = Path(template_path)
+
+    if not template_path.exists():
+        logging.warning(f"Model card template not found at '{template_path}'")
+        return None
+
+    st_path = save_path / "model.safetensors"
+    if st_path.exists():
+        try:
+            num_params = count_safetensors_params(st_path)
+            total_params_str = f"{num_params:,} ({format_num_params(num_params)})"
+        except Exception as e:
+            logging.warning(f"Could not compute parameter count from safetensors: {e}")
+            total_params_str = "N/A"
+    else:
+        total_params_str = "N/A"
+
+    card_data = ModelCardData(
+        language=language,
+        license=license,
+        base_model=str(base_model),
+        model_name=str(model_name),
+        pipeline_tag=pipeline_tag,
+    )
+
+    card = ModelCard.from_template(
+        card_data,
+        template_path=str(template_path),
+        base=str(base_model),
+        model_id=str(model_name),
+        total_parameters=total_params_str,
+        **template_kwargs,
+    )
+
+    card.save(save_path / "README.md")
+    logging.info(f"Model card written to {save_path / 'README.md'}")
+    return card
+

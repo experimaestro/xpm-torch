@@ -9,13 +9,14 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Union, Type, Dict, TypeVar
+from typing import Optional, Union, Type, Dict, TypeVar, Any
 
 from experimaestro.huggingface import ExperimaestroHFHub
 from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 from experimaestro.core.context import SerializedPath
 from experimaestro.core.objects import ConfigInformation
+from experimaestro.core.objects.config import ConfigMixin
 
 from xpm_torch.module import Module, ModuleLoader, assemble_readme_sections
 
@@ -41,7 +42,7 @@ def prepare_hf_model(model_id: str) -> bool:
 
     logger.info("Preparing model %s ...", model_id)
     if model_in_cache and tokenizer_in_cache:
-        logger.info("Model and tokenizer for %s are already in cache.", model_id)
+        logger.info("All files for %s are already in cache.", model_id)
         return True
 
     logger.info("Downloading missing files for %s...", model_id)
@@ -58,40 +59,70 @@ def prepare_hf_model(model_id: str) -> bool:
 
 
 def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
-    """Check if the model or tokenizer is already downloaded in the cache.
+    """Check if all essential model or tokenizer files are downloaded in the cache.
+
+    Queries HF API for the repository file manifest, verifies each essential
+    file exists locally as a valid (non-broken) file, and touches each blob
+    to reset Robinhood purge timers.
 
     Args:
         model_id: The ID of the model or tokenizer to check.
-        is_model: If True, checks for model files. If False, checks for tokenizer files.
+        is_model: Kept for signature compatibility.
 
     Returns:
-        True if the model or tokenizer is already downloaded, False otherwise.
+        True if all essential files exist locally and are valid, False otherwise.
     """
-    model_files = [
-        "config.json",
-        "pytorch_model.bin",
-        "tf_model.h5",
-        "model.safetensors",
-    ]
-    tokenizer_files = [
-        "tokenizer.json",
-        "tokenizer_config.json",
-        "vocab.json",
-        "merges.txt",
-    ]
+    from huggingface_hub import HfApi
 
-    files_to_check = model_files if is_model else tokenizer_files
+    try:
+        api = HfApi()
+        repo_files = api.list_repo_files(repo_id=model_id)
 
-    for filename in files_to_check:
-        try:
-            hf_hub_download(
-                repo_id=model_id, filename=filename, local_files_only=True
-            )
+        # Ignore optional export formats & documentation metadata
+        def is_essential(filename: str) -> bool:
+            if filename.startswith(("onnx/", "openvino/", ".")):
+                return False
+            if filename.endswith((".onnx", ".gguf", ".ot", ".msgpack")):
+                return False
+            if filename in ("README.md", ".gitattributes", "results.csv", "experimaestro.json"):
+                return False
             return True
-        except (EntryNotFoundError, RepositoryNotFoundError):
-            continue
 
-    return False
+        essential_files = [f for f in repo_files if is_essential(f)]
+        if not essential_files:
+            logger.warning("No essential files found for %s in HF Hub. Got only: %s", model_id, repo_files)
+            return False
+
+        for filename in essential_files:
+            try:
+                local_path = hf_hub_download(
+                    repo_id=model_id, filename=filename, local_files_only=True
+                )
+                p = Path(local_path)
+                # Verify that the file actually exists on disk (catches broken Robinhood symlinks)
+                if not p.exists():
+                    logger.warning(
+                        "Broken symlink detected for %s in %s cache: %s",
+                        filename,
+                        model_id,
+                        local_path,
+                    )
+                    return False
+
+                # Touch the resolved target blob to reset Robinhood mtime/atime
+                try:
+                    p.resolve().touch()
+                except Exception as te:
+                    logger.debug("Failed to touch %s: %s", local_path, te)
+
+            except (EntryNotFoundError, RepositoryNotFoundError, Exception):
+                return False
+
+        return True
+
+    except Exception as e:
+        logger.info("Unable to query HF API online for %s: %s", model_id, e)
+        return False
 
 
 def get_hf_config(repo_id: str) -> dict:
@@ -187,20 +218,31 @@ class TorchHFHub(ExperimaestroHFHub):
     sections, TensorBoard logs, etc.
     """
 
+    def __init__(self, loader: ModuleLoader):
+        #Just rename the "config" attribute to "loader" for clarity, 
+        # since this class is specifically for ModuleLoaders
+        super().__init__(loader.__config__)
+        self.loader = loader
+
     def _save_pretrained(self, save_directory: Union[str, Path]):
         save_directory = Path(save_directory)
         super()._save_pretrained(save_directory)
 
         # Call ModuleLoader hub hooks
-        self.config.write_hub_extras(save_directory)
+        self.loader.write_hub_extras(save_directory)
 
-        # Build README from loader sections
-        loader_sections = self.config.hub_readme_sections()
-        base_sections = self._readme_base_sections()
-        if base_sections or loader_sections:
-            readme = assemble_readme_sections(base_sections, loader_sections)
-            (save_directory / "README.md").write_text(readme)
-
+        # Build README from loader sections only if README.md was not generated by write_hub_extras
+        if not (save_directory / "README.md").exists():
+            loader_sections = self.loader.hub_readme_sections()
+            base_sections = self._readme_base_sections()
+            if base_sections or loader_sections:
+                readme = assemble_readme_sections(base_sections, loader_sections)
+                (save_directory / "README.md").write_text(readme)
+        else:
+            logger.info(
+                "README.md already exists in %s, skipping README generation.",
+                save_directory,
+            )
 
     @classmethod
     def _from_pretrained(

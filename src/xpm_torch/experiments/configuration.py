@@ -2,7 +2,7 @@ from experimaestro.experiments import configuration  # noqa: F401
 from typing import List, Optional
 from functools import cached_property
 from xpm_torch.configuration import FabricConfiguration
-from xpm_torch.schedulers import LinearWithWarmup
+from xpm_torch.schedulers import LinearWithWarmup, LinearWithWarmupAndMaxEpochs
 from xpm_torch.optim import (
     AdamW,
     Adam,
@@ -12,6 +12,7 @@ from xpm_torch.optim import (
     RegexParameterFilter,
     get_optimizers,
 )
+
 
 
 @configuration
@@ -110,6 +111,43 @@ class TransformerOptimization:
             ]
         )
 
+    def get_optimizers_with_total_steps(self, total_training_steps: int):
+        """Returns optimizers using LinearWithWarmupAndMaxEpochs computed over total_training_steps"""
+        if not self.scheduler:
+            return self.optimizer
+
+        scheduler = LinearWithWarmupAndMaxEpochs.C(
+            num_warmup_steps=self.num_warmup_steps,
+            min_factor=self.warmup_min_factor,
+            total_training_steps=total_training_steps,
+        )
+        if not self.re_no_l2_regularization:
+            return get_optimizers(
+                [
+                    ParameterOptimizer.C(
+                        scheduler=scheduler,
+                        optimizer=self.get_optimizer(True),
+                    ),
+                ]
+            )
+
+        return get_optimizers(
+            [
+                ParameterOptimizer.C(
+                    scheduler=scheduler,
+                    optimizer=self.get_optimizer(False),
+                    filter=RegexParameterFilter.C(
+                        includes=self.re_no_l2_regularization
+                    ),
+                ),
+                ParameterOptimizer.C(
+                    scheduler=scheduler,
+                    optimizer=self.get_optimizer(True),
+                ),
+            ]
+        )
+
+
 @configuration
 class Fabric:
     """Experiment Configuration for building a Fabric Config"""
@@ -124,9 +162,13 @@ class Fabric:
     accelerator: str = "auto"
     """ Accelerator to use """
 
+    devices: str = "auto"
+    """ Devices to use """
+
     def get_config(self):
         return FabricConfiguration.C(
                     strategy=self.strategy,
                     precision=self.precision,
                     accelerator=self.accelerator,
+                    devices=self.devices,
                 )

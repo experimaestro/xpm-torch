@@ -39,3 +39,10 @@ class TensorboardLogger(MetricsLogger):
 
     def close(self) -> None:
         self._writer.close()
+
+
+class NullMetricsLogger(MetricsLogger):
+    """Discards all metrics (used e.g. on non-zero ranks in distributed training)."""
+
+    def log_scalar(self, tag: str, value: float, step: int) -> None:
+        pass

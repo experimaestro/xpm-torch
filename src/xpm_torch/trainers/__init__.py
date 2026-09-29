@@ -120,13 +120,23 @@ class LossTrainer(Trainer):
         super().initialize(random, context)
 
         self.sampler.initialize(random)
-        self.batcher_worker = self.batcher.initialize(self.batch_size)
+        local_bs = (
+            context.get_local_batch_size(self.batch_size)
+            if context is not None
+            else self.batch_size
+        )
+        self.batcher_worker = self.batcher.initialize(local_bs)
 
     def _create_dataloader(self, dataset, collate_fn):
         """Create a StatefulDataLoader from a dataset and collate function."""
+        batch_size = (
+            self.context.get_local_batch_size(self.batch_size)
+            if hasattr(self, "context") and self.context is not None
+            else self.batch_size
+        )
         self.dataloader = StatefulDataLoader(
             dataset,
-            batch_size=self.batch_size,
+            batch_size=batch_size,
             collate_fn=collate_fn,
             num_workers=self.num_workers,
         )
