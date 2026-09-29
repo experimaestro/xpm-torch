@@ -12,6 +12,8 @@ Learner
 
 .. autoxpmconfig:: xpm_torch.learner.Strategy
 
+.. autoxpmconfig:: xpm_torch.learner.UpdateModelHook
+
 Trainers
 --------
 

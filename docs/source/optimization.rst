@@ -30,6 +30,8 @@ Schedulers
 
 .. autoxpmconfig:: xpm_torch.schedulers.LinearWithWarmup
 
+.. autoxpmconfig:: xpm_torch.schedulers.LinearWithWarmupAndMaxEpochs
+
 .. autoxpmconfig:: xpm_torch.schedulers.CosineWithWarmup
 
 Optimization Hooks
