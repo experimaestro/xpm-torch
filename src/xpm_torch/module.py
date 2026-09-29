@@ -17,12 +17,6 @@ from experimaestro import (
 )
 from xpm_torch.utils.utils import Initializable
 
-from xpm_torch.utils.fabric import (
-    get_fabric_precision,
-    is_16bit_precision,
-    fallback_fa2_if_incompatible_precision,
-    is_fa2_available,
-)
 
 logger = logging.getLogger(__name__)
 
