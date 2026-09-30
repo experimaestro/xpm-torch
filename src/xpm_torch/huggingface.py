@@ -37,6 +37,10 @@ def prepare_hf_model(model_id: str) -> bool:
         True if both model and tokenizer are in cache or after downloading,
         False if download fails.
     """
+    if Path(model_id).is_dir():
+        logger.info("Model '%s' is a local directory, skipping HF download.", model_id)
+        return True
+
     model_in_cache = check_hf_cache(model_id, is_model=True)
     tokenizer_in_cache = check_hf_cache(model_id, is_model=False)
 
@@ -72,6 +76,9 @@ def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
     Returns:
         True if all essential files exist locally and are valid, False otherwise.
     """
+    if Path(model_id).is_dir():
+        return True
+
     from huggingface_hub import HfApi
 
     try:
@@ -126,7 +133,11 @@ def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
 
 
 def get_hf_config(repo_id: str) -> dict:
-    """Pull config.json from HF Hub without importing transformers."""
+    """Pull config.json from local directory or HF Hub without importing transformers."""
+    local_p = Path(repo_id).expanduser()
+    if local_p.is_dir() and (local_p / "config.json").exists():
+        with open(local_p / "config.json") as f:
+            return json.load(f)
     config_path = hf_hub_download(repo_id=repo_id, filename="config.json")
     with open(config_path) as f:
         return json.load(f)
