@@ -38,9 +38,9 @@ from xpm_torch.trainers.context import (
     TrainerContext,
 )
 from xpm_torch.trainers import Trainer
-from xpm_torch.module import fallback_fa2_if_incompatible_precision
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,6 +65,7 @@ class UpdateModelHook(InitializationHook):
     It traverses a target object tree and replaces all occurrences of the unwrapped model
     with the true Fabric-wrapped model. Optionally, it can also inject the Fabric instance.
     """
+
     def __init__(self, target_obj, unwrapped_model, fabric=None):
         self.target_obj = target_obj
         self.unwrapped_model = unwrapped_model
@@ -73,12 +74,12 @@ class UpdateModelHook(InitializationHook):
     def _swap_model(self, obj, wrapped_model, visited=None):
         if visited is None:
             visited = set()
-        
+
         # Prevent infinite recursion on cyclic references
         if id(obj) in visited:
             return
         visited.add(id(obj))
-        
+
         # 1. Update direct references to the model
         for attr in ["scorer", "model", "retriever"]:
             if getattr(obj, attr, None) is self.unwrapped_model:
@@ -89,22 +90,26 @@ class UpdateModelHook(InitializationHook):
                         setattr(obj, "fabric", self.fabric)
                     except Exception:
                         pass
-            
+
         # 2. Recurse down children to support nested component trees
         if hasattr(obj, "named_children"):
             for _, child in obj.named_children():
                 self._swap_model(child, wrapped_model, visited)
-        
+
         # Also check experimaestro config values if it's a Config object
         if hasattr(obj, "__fields__"):
             for field_name in obj.__fields__:
                 field_val = getattr(obj, field_name, None)
-                if field_val is not None and not isinstance(field_val, (str, int, float, bool, dict, list)):
+                if field_val is not None and not isinstance(
+                    field_val, (str, int, float, bool, dict, list)
+                ):
                     self._swap_model(field_val, wrapped_model, visited)
 
     def after(self, context):
         # Fetch the definitively wrapped model from the training state
-        wrapped_model = getattr(context.state, "_fabric_model", getattr(context.state, "model", None))
+        wrapped_model = getattr(
+            context.state, "_fabric_model", getattr(context.state, "model", None)
+        )
         if wrapped_model is not None and wrapped_model is not self.unwrapped_model:
             self._swap_model(self.target_obj, wrapped_model)
 
@@ -210,9 +215,10 @@ class Learner(Task, EasyLogger):
     before and after the initialization of the trainer and listeners.
     """
 
-    fabric_config: Param[FabricConfiguration] = field(default_factory=FabricConfiguration.C)
+    fabric_config: Param[FabricConfiguration] = field(
+        default_factory=FabricConfiguration.C
+    )
     """Runtime configuration, managed by Fabric"""
-
 
     def __validate__(self):
         assert self.optimizers, "At least one optimizer should be defined"
@@ -224,9 +230,7 @@ class Learner(Task, EasyLogger):
     def __submit__(self, dep, add_action):
         """Submit the learner task and register export actions."""
         learned_model = dep(
-            self.model.loader_config(
-                self.last_checkpoint_path / TrainState.MODEL_DIR
-            )
+            self.model.loader_config(self.last_checkpoint_path / TrainState.MODEL_DIR)
         )
 
         # Register export action — the model controls the action type
@@ -306,14 +310,10 @@ class Learner(Task, EasyLogger):
 
         # Wrap dataloader with Fabric for device placement (if using new path)
         if hasattr(self.trainer, "dataloader") and self.trainer.dataloader is not None:
-            self.trainer.dataloader = fabric.setup_dataloaders(
-                self.trainer.dataloader
-            )
+            self.trainer.dataloader = fabric.setup_dataloaders(self.trainer.dataloader)
 
         for listener in self.listeners:
             listener.initialize(self, self.context)
-
-
 
         num_training_steps = self.max_epochs * self.steps_per_epoch
 
@@ -337,22 +337,23 @@ class Learner(Task, EasyLogger):
             f"[Learner] Model setup via setup_with_fabric completed (type: {type(self.model).__name__})"
         )
 
-
-
-
         if self.optimizer.optimizers:
-            self.optimizer.optimizers = list(fabric.setup_optimizers(*self.optimizer.optimizers))
+            self.optimizer.optimizers = list(
+                fabric.setup_optimizers(*self.optimizer.optimizers)
+            )
         else:
-            self.logger.error("No optimizers were initialized; training will not update model parameters.")
-        
+            self.logger.error(
+                "No optimizers were initialized; training will not update model parameters."
+            )
+
         # Propagate the Fabric-wrapped model back to the state and trainer
         # so that training loops automatically use the wrapped forward pass.
-        # We use a private attribute `_fabric_model` to prevent Experimaestro 
+        # We use a private attribute `_fabric_model` to prevent Experimaestro
         # `Param` descriptors from stripping the PyTorch proxy wrapper!
         self.context.state._fabric_model = self.model
         if self.trainer is not None:
             self.trainer._fabric_model = self.model
-            
+
         # Also attempt standard assignment for compatibility
         self.context.state.model = self.model
         if getattr(self.trainer, "model", None) is not None:
@@ -441,13 +442,13 @@ class Learner(Task, EasyLogger):
                     metrics = {}
                     for listener in self.listeners:
                         listener.update_metrics(metrics)
-                    if self.context.writer is not None:
-                        self.context.writer.add_hparams(getattr(self, "__tags__", {}), metrics)
+                    self.context.metrics_logger.log_hparams(
+                        getattr(self, "__tags__", {}), metrics
+                    )
                 fabric.barrier()
 
     def iter_train(self, fabric: L.Fabric) -> Iterator[TrainState]:
-        """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps
-        """
+        """Infinite generator of training states: one per epoch, containing self.steps_per_epoch steps"""
         # Try to load a checkpoint
 
         if self.context.load_bestcheckpoint(self.max_epochs):
@@ -508,16 +509,20 @@ class Learner(Task, EasyLogger):
                         hook.after(self.context)
 
                 metrics.add(
-                    ScalarMetric("iter_per_seconds", self.steps_per_epoch / (perf_counter() - start), 1)
+                    ScalarMetric(
+                        "iter_per_seconds",
+                        self.steps_per_epoch / (perf_counter() - start),
+                        1,
+                    )
                 )
                 # Yields the current state (after one epoch)
                 # -> allows listeners to process it and decide whether to stop or not
                 yield self.context.state
 
-                # Report metrics over the epoch, and log them in tensorboard
+                # Report metrics over the epoch, and log them to the monitoring backend
                 # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
                 metrics.report(
                     self.context.state.step,
-                    self.context.writer,
+                    self.context.metrics_logger,
                     "train",
                 )

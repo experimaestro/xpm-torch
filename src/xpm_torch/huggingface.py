@@ -9,22 +9,23 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Union, Type, Dict, TypeVar, Any
+from typing import Optional, Union, Type, Dict, TypeVar
 
 from experimaestro.huggingface import ExperimaestroHFHub
 from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 from experimaestro.core.context import SerializedPath
 from experimaestro.core.objects import ConfigInformation
-from experimaestro.core.objects.config import ConfigMixin
 
 from xpm_torch.module import Module, ModuleLoader, assemble_readme_sections
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Generic variable that is either ModelHubMixin or a subclass thereof
 T = TypeVar("T", bound="TorchHFHub")
+
 
 @lru_cache
 def prepare_hf_model(model_id: str) -> bool:
@@ -91,13 +92,22 @@ def check_hf_cache(model_id: str, is_model: bool = True) -> bool:
                 return False
             if filename.endswith((".onnx", ".gguf", ".ot", ".msgpack")):
                 return False
-            if filename in ("README.md", ".gitattributes", "results.csv", "experimaestro.json"):
+            if filename in (
+                "README.md",
+                ".gitattributes",
+                "results.csv",
+                "experimaestro.json",
+            ):
                 return False
             return True
 
         essential_files = [f for f in repo_files if is_essential(f)]
         if not essential_files:
-            logger.warning("No essential files found for %s in HF Hub. Got only: %s", model_id, repo_files)
+            logger.warning(
+                "No essential files found for %s in HF Hub. Got only: %s",
+                model_id,
+                repo_files,
+            )
             return False
 
         for filename in essential_files:
@@ -229,11 +239,12 @@ class TorchHFHub(ExperimaestroHFHub):
     sections, TensorBoard logs, etc.
     """
 
-    def __init__(self, loader: ModuleLoader):
-        #Just rename the "config" attribute to "loader" for clarity, 
-        # since this class is specifically for ModuleLoaders
-        super().__init__(loader.__config__)
-        self.loader = loader
+    def __init__(self, config: ModuleLoader):
+        # The parameter must be named ``config``: huggingface_hub's mixin
+        # otherwise tries to serialize it as JSON in ``config.json``.
+        # Accepts either a config or an instantiated loader.
+        super().__init__(getattr(config, "__config__", config))
+        self.loader = config
 
     def _save_pretrained(self, save_directory: Union[str, Path]):
         save_directory = Path(save_directory)
@@ -266,7 +277,7 @@ class TorchHFHub(ExperimaestroHFHub):
         resume_download=None,
         local_files_only=False,
         token=None,
-        **model_kwargs
+        **model_kwargs,
     ) -> Module:
         """
         This overrides `ExperimaestroHFHub._from_pretrained`
@@ -324,7 +335,7 @@ class TorchHFHub(ExperimaestroHFHub):
             partial_loading=True,
             definition_filename=cls.definition_filename,
         )
-        #execute the moduleLoader Instance -> loads the model
+        # execute the moduleLoader Instance -> loads the model
         loader.execute()
 
         return loader.model
@@ -341,7 +352,7 @@ class TorchHFHub(ExperimaestroHFHub):
         cache_dir: Optional[Union[str, Path]] = None,
         local_files_only: bool = False,
         revision: Optional[str] = None,
-        as_instance: bool = False, #specific to this Class
+        as_instance: bool = False,  # specific to this Class
         **model_kwargs,
     ) -> ModuleLoader:
         """
@@ -357,10 +368,9 @@ class TorchHFHub(ExperimaestroHFHub):
             resume_download=resume_download,
             local_files_only=local_files_only,
             token=token,
-            as_instance=as_instance, # pass to super but it will be ignored
+            as_instance=as_instance,  # pass to super but it will be ignored
             **model_kwargs,
         )
-
 
     def _readme_base_sections(self):
         """Return base README sections. Override in subclasses to add

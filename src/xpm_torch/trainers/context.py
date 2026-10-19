@@ -10,14 +10,13 @@ import shutil
 import torch
 import logging
 
-from torch.utils.tensorboard.writer import SummaryWriter
 from shutil import rmtree
 from contextlib import contextmanager
 import lightning as L
 
 from experimaestro.utils import cleanupdir
 from xpm_torch.context import InitializationHook, Hook, Context
-from xpm_torch.metrics import Metric, Metrics
+from xpm_torch.metrics import Metric, Metrics, MetricsLogger
 from xpm_torch.losses import Loss
 
 if TYPE_CHECKING:
@@ -209,7 +208,7 @@ class TrainerContext(Context):
         self.logpath = logpath
         self.max_epoch = max_epoch
         self.steps_per_epoch = steps_per_epoch
-        self._writer = None
+        self._logger = None
         self._scope = []
         self._losses = None
         self.fabric = fabric
@@ -232,20 +231,28 @@ class TrainerContext(Context):
         return global_batch_size
 
     @property
-    def writer(self):
-        """Returns a tensorboard writer
+    def metrics_logger(self) -> MetricsLogger:
+        """Returns the metrics logger for this context.
 
-        by default, purges the entries beside the current epoch
+        Defaults to a TensorBoard logger that purges entries beside the current
+        epoch. The backend is resolved lazily so swapping it (e.g. for Weights &
+        Biases) does not require importing TensorBoard.
         """
-        if not self.is_global_zero():
-            return None
+        if self._logger is None:
+            if self.is_global_zero():
+                from xpm_torch.loggers import TensorboardLogger
 
-        if self._writer is None:
-            logger.info(
-                f"[TrainerContext] Initializing SummaryWriter at logpath='{self.logpath}' (rank 0)"
-            )
-            self._writer = SummaryWriter(self.logpath, purge_step=self.state.step)
-        return self._writer
+                logger.info(
+                    f"[TrainerContext] Initializing TensorBoard logger at logpath='{self.logpath}' (rank 0)"
+                )
+                self._logger = TensorboardLogger(
+                    self.logpath, purge_step=self.state.step
+                )
+            else:
+                from xpm_torch.loggers import NullMetricsLogger
+
+                self._logger = NullMetricsLogger()
+        return self._logger
 
     @property
     def model(self):
@@ -358,9 +365,9 @@ class TrainerContext(Context):
             self.state.copy_model(path)
 
     def add_loss(self, loss: Loss):
-        assert (
-            self._losses is not None
-        ), "This should be called in the context where loss is computed"
+        assert self._losses is not None, (
+            "This should be called in the context where loss is computed"
+        )
         self._losses.append(loss)
 
     @contextmanager
