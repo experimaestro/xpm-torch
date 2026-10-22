@@ -1,6 +1,8 @@
 Overview
 ========
 
+Documentation for |version_badge|
+
 **xpm-torch** is a PyTorch training framework built on
 `experimaestro <https://experimaestro-python.readthedocs.io/>`_ and
 `Lightning Fabric <https://lightning.ai/docs/fabric/>`_. It bridges
