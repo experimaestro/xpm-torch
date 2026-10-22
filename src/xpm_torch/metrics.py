@@ -22,11 +22,19 @@ class MetricsLogger(abc.ABC):
         for tag, value in values.items():
             self.log_scalar(tag, value, step)
 
+    def log_histogram(self, tag: str, values: object, step: int) -> None:
+        """Log a histogram of values (optional, no-op by default)."""
+        pass
+
     def log_hparams(
         self, hparams: Mapping[str, object], metrics: Mapping[str, float]
     ) -> None:
         """Record hyper-parameters and their final metrics (optional, no-op by
         default). Called once at the end of training."""
+
+    def flush(self) -> None:
+        """Flush buffered metrics to storage (optional, no-op by default)."""
+        pass
 
     def close(self) -> None:
         """Flush and release backend resources (optional, no-op by default)."""

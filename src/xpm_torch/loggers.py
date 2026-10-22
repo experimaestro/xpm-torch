@@ -32,10 +32,20 @@ class TensorboardLogger(MetricsLogger):
     def log_scalar(self, tag: str, value: float, step: int) -> None:
         self._writer.add_scalar(tag, value, step)
 
+    def log_histogram(self, tag: str, values: object, step: int) -> None:
+        import torch
+
+        if isinstance(values, torch.Tensor) and values.dtype == torch.bfloat16:
+            values = values.float()
+        self._writer.add_histogram(tag, values, step)
+
     def log_hparams(
         self, hparams: Mapping[str, object], metrics: Mapping[str, float]
     ) -> None:
         self._writer.add_hparams(dict(hparams), dict(metrics))
+
+    def flush(self) -> None:
+        self._writer.flush()
 
     def close(self) -> None:
         self._writer.close()

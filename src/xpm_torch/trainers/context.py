@@ -173,12 +173,37 @@ class InitializationTrainingHook(TrainingHook, InitializationHook):
 
 
 class TrainerContext(Context):
-    """Contains all the information about the training context
-    for a spefic
+    """Contains all the information about the training context during optimization.
 
-    This object is used when training to provide models and losses'
-    with extra information - as well as the possibility to add
-    regularization losses
+    ``TrainerContext`` holds training state (:class:`TrainState`), metrics, loggers,
+    Lightning Fabric instances, and accumulated regularization losses.
+
+    Why ambient context?
+        Instead of passing ``info: TrainerContext`` through every model's ``forward()``
+        or scoring methods (polluting clean PyTorch interfaces), ``TrainerContext`` is
+        managed as an ambient context via Python's :mod:`contextvars`.
+        :class:`~xpm_torch.trainers.LossTrainer` automatically activates the context around
+        each microbatch via ``with self.context.losses():``. Any model or module needing
+        training hooks or loss registration simply queries :meth:`TrainerContext.current`.
+        Outside training (e.g. standalone inference, validation, export), ``current()``
+        evaluates to ``None``.
+
+    Examples:
+        Accessing the active context inside a model:
+
+        >>> class MyScorer(nn.Module):
+        ...     def forward(self, inputs):
+        ...         out = self.encoder(inputs)
+        ...         ctx = TrainerContext.current()
+        ...         if ctx is not None:
+        ...             for hook in ctx.hooks(RegularizerHook):
+        ...                 hook(ctx, out)
+        ...         return out
+
+        Testing models with context outside a trainer:
+
+        >>> with context.losses() as losses:
+        ...     out = model(inputs)
     """
 
     metrics: Optional[Metrics]
@@ -211,6 +236,7 @@ class TrainerContext(Context):
         self._logger = None
         self._scope = []
         self._losses = None
+        self.metrics = None
         self.fabric = fabric
         self.state = TrainState(model, trainer, optimizer)
 
@@ -253,6 +279,11 @@ class TrainerContext(Context):
 
                 self._logger = NullMetricsLogger()
         return self._logger
+
+    @property
+    def writer(self):
+        """Returns the underlying TensorBoard writer from metrics_logger (escape hatch)."""
+        return getattr(self.metrics_logger, "writer", None)
 
     @property
     def model(self):
@@ -365,6 +396,8 @@ class TrainerContext(Context):
             self.state.copy_model(path)
 
     def add_loss(self, loss: Loss):
+        if getattr(self, "_is_backward", False):
+            return  # Ignore duplicate calls during activation checkpointing recomputation
         assert self._losses is not None, (
             "This should be called in the context where loss is computed"
         )
@@ -373,29 +406,37 @@ class TrainerContext(Context):
     @contextmanager
     def losses(self):
         previous = self._losses
-        try:
-            self._losses = []
-            yield self._losses
-        finally:
-            self._losses = previous
+        with self:
+            try:
+                self._losses = []
+                yield self._losses
+            finally:
+                self._losses = previous
 
     @contextmanager
     def step(self, metrics):
+        previous_metrics = self.metrics
         try:
-            self.state.optimizer.zero_grad()
+            if self.state.optimizer:
+                self.state.optimizer.zero_grad()
             self.metrics = Metrics()
             yield self.metrics
-            self.state.optimizer.optimizer_step(self)
-            self.state.optimizer.scheduler_step(self)
+            if self.state.optimizer:
+                self.state.optimizer.optimizer_step(self)
+                self.state.optimizer.scheduler_step(self)
             metrics.merge(self.metrics)
         finally:
-            self.metrics = None
+            self.metrics = previous_metrics
 
     def backward(self, loss: torch.Tensor):
-        if self.fabric:
-            self.fabric.backward(loss)
-        else:
-            loss.backward()
+        self._is_backward = True
+        try:
+            if self.fabric:
+                self.fabric.backward(loss)
+            else:
+                loss.backward()
+        finally:
+            self._is_backward = False
 
     def add_metric(self, metric: Metric):
         """
@@ -404,10 +445,17 @@ class TrainerContext(Context):
         :param metric: The metric to be added
         :type metric: Metric
         """
+        if getattr(self, "_is_backward", False):
+            return
         assert self.metrics is not None, "Not within an optimization step"
         if self._scope:
             metric.key = "/".join(s for s in self._scope if s) + "/" + metric.key
         self.metrics.add(metric)
+
+    def call_hooks(self, cls, method, *args, **kwargs):
+        if getattr(self, "_is_backward", False):
+            return
+        super().call_hooks(cls, method, *args, **kwargs)
 
     @contextmanager
     def scope(self, name: str):
