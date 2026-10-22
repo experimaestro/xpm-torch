@@ -60,11 +60,12 @@ distributed training support:
   via :meth:`~xpm_torch.trainers.context.TrainState.save` /
   :meth:`~xpm_torch.trainers.context.TrainState.load`.
 
-- :class:`~xpm_torch.trainers.context.TrainerContext` — Passed through the
-  training loop; holds the current state, TensorBoard writer, Fabric instance,
-  and provides :meth:`~xpm_torch.trainers.context.TrainerContext.add_loss` /
+- :class:`~xpm_torch.trainers.context.TrainerContext` — Ambient training
+  context managed via Python ``contextvars``; holds the current state,
+  TensorBoard writer, Fabric instance, and provides
+  :meth:`~xpm_torch.trainers.context.TrainerContext.add_loss` /
   :meth:`~xpm_torch.trainers.context.TrainerContext.add_metric` for
-  regularization and logging.
+  regularization and logging without polluting model ``forward()`` signatures.
 
 - :class:`~xpm_torch.learner.LearnerListener` — Hook called after each epoch
   (e.g. for validation and early stopping). Produces

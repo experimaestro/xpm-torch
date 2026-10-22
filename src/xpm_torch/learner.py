@@ -462,67 +462,68 @@ class Learner(Task, EasyLogger):
             self.context.nextepoch()
 
             # Train for an epoch
-            with tqdm(
-                leave=False,
-                total=self.steps_per_epoch,
-                ncols=100,
-                desc=f"Train - epoch #{self.context.epoch}",
-            ) as pbar:
-                # Put the model into training mode (just in case)
-                self.context.state.model.train()
+            with self.context:
+                with tqdm(
+                    leave=False,
+                    total=self.steps_per_epoch,
+                    ncols=100,
+                    desc=f"Train - epoch #{self.context.epoch}",
+                ) as pbar:
+                    # Put the model into training mode (just in case)
+                    self.context.state.model.train()
 
-                # Epoch: loop over batches
-                metrics = Metrics()
-                start = perf_counter()
-                for b in range(self.steps_per_epoch):
-                    # Get the next batch, recreate iterator on exhaustion
-                    try:
-                        batch = next(batch_iter)
-                    except StopIteration:
-                        batch_iter = self.trainer.iter_batches()
-                        batch = next(batch_iter)
-
-                    self.context.nextbatch()
-
-                    while True:
+                    # Epoch: loop over batches
+                    metrics = Metrics()
+                    start = perf_counter()
+                    for b in range(self.steps_per_epoch):
+                        # Get the next batch, recreate iterator on exhaustion
                         try:
-                            # Computes the gradient, takes a step and collect metrics
-                            with self.context.step(metrics):
-                                # Call epoch hooks
-                                for hook in self.context.hooks(StepTrainingHook):
-                                    hook.before(self.context)
+                            batch = next(batch_iter)
+                        except StopIteration:
+                            batch_iter = self.trainer.iter_batches()
+                            batch = next(batch_iter)
 
-                                # Computes the gradient
-                                self.trainer.process_batch(batch)
+                        self.context.nextbatch()
 
-                                # Update metrics and counter
-                                pbar.update(1)
-                                break
-                        except RecoverableOOMError:
-                            logger.warning(
-                                "Recoverable OOM detected"
-                                " - re-running the training step"
-                            )
-                            continue
+                        while True:
+                            try:
+                                # Computes the gradient, takes a step and collect metrics
+                                with self.context.step(metrics):
+                                    # Call epoch hooks
+                                    for hook in self.context.hooks(StepTrainingHook):
+                                        hook.before(self.context)
 
-                    for hook in self.context.hooks(StepTrainingHook):
-                        hook.after(self.context)
+                                    # Computes the gradient
+                                    self.trainer.process_batch(batch)
 
-                metrics.add(
-                    ScalarMetric(
-                        "iter_per_seconds",
-                        self.steps_per_epoch / (perf_counter() - start),
-                        1,
+                                    # Update metrics and counter
+                                    pbar.update(1)
+                                    break
+                            except RecoverableOOMError:
+                                logger.warning(
+                                    "Recoverable OOM detected"
+                                    " - re-running the training step"
+                                )
+                                continue
+
+                        for hook in self.context.hooks(StepTrainingHook):
+                            hook.after(self.context)
+
+                    metrics.add(
+                        ScalarMetric(
+                            "iter_per_seconds",
+                            self.steps_per_epoch / (perf_counter() - start),
+                            1,
+                        )
                     )
-                )
-                # Yields the current state (after one epoch)
-                # -> allows listeners to process it and decide whether to stop or not
-                yield self.context.state
+            # Yields the current state (after one epoch)
+            # -> allows listeners to process it and decide whether to stop or not
+            yield self.context.state
 
-                # Report metrics over the epoch, and log them to the monitoring backend
-                # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
-                metrics.report(
-                    self.context.state.step,
-                    self.context.metrics_logger,
-                    "train",
-                )
+            # Report metrics over the epoch, and log them to the monitoring backend
+            # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
+            metrics.report(
+                self.context.state.step,
+                self.context.metrics_logger,
+                "train",
+            )

@@ -32,6 +32,47 @@ Training State
 .. autoclass:: xpm_torch.trainers.context.TrainerContext
    :members:
 
+Ambient Context & Training Hooks Workflow
+-----------------------------------------
+
+In ``xpm-torch``, training context is managed as an **ambient context** using Python's
+:mod:`contextvars`, eliminating the need to pass ``info: Optional[TrainerContext]`` through
+neural network ``forward()`` signatures.
+
+How it works
+~~~~~~~~~~~~
+
+1. **Automatic Activation**: During training, :class:`~xpm_torch.trainers.LossTrainer` automatically
+   activates the current :class:`~xpm_torch.trainers.context.TrainerContext` around every microbatch
+   via ``with self.context.losses():``.
+2. **Clean Model Signatures**: Neural models (e.g., scorers or encoders) keep standard PyTorch
+   signatures (accepting only tensors or data items):
+
+   .. code-block:: python
+
+       class MyScorer(nn.Module):
+           def forward(self, inputs):
+               out = self.backbone(inputs)
+
+               # Retrieve ambient context if running inside a training step
+               ctx = TrainerContext.current()
+               if ctx is not None:
+                   for hook in ctx.hooks(RegularizerHook):
+                       hook(ctx, out)
+
+               return out
+
+3. **Inference & Evaluation**: Outside of a training step (e.g. during standalone inference,
+   validation loops, or Hugging Face export), :meth:`~xpm_torch.trainers.context.TrainerContext.current`
+   returns ``None``, allowing the forward pass to proceed without side effects.
+4. **Testing & Script Usage**: To test model regularizers or hooks outside a full :class:`~xpm_torch.learner.Learner`
+   loop, simply wrap execution in a context:
+
+   .. code-block:: python
+
+       with context.losses():
+           out = model(inputs)
+
 Training Hooks
 --------------
 
