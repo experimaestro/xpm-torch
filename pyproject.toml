@@ -59,3 +59,13 @@ version-file = "src/xpm_torch/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/xpm_torch"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "T20"]
+ignore = ["E501"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25

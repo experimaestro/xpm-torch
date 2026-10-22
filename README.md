@@ -1,6 +1,19 @@
 # xpm-torch
 
+[![PyPI version](https://badge.fury.io/py/xpm-torch.svg)](https://badge.fury.io/py/xpm-torch)
+[![RTD](https://app.readthedocs.org/projects/xpm-torch/badge/?version=stable)](https://xpm-torch.readthedocs.io/en/stable/)
+
 PyTorch training framework built on [experimaestro](https://experimaestro-python.readthedocs.io/) and [Lightning Fabric](https://lightning.ai/docs/fabric/).
+
+## Documentation
+
+The full documentation is at [xpm-torch.readthedocs.io](https://xpm-torch.readthedocs.io/en/stable/):
+
+- [Overview](https://xpm-torch.readthedocs.io/en/stable/overview.html) — what's in the package and how it fits together
+- [Module system](https://xpm-torch.readthedocs.io/en/stable/module.html) — `Module`, `ModuleLoader` and safetensors serialization
+- [Training](https://xpm-torch.readthedocs.io/en/stable/training.html) — `Learner`, trainers, checkpointing and validation
+- [Optimization](https://xpm-torch.readthedocs.io/en/stable/optimization.html) — optimizers, schedulers and gradient hooks
+- [HuggingFace Hub](https://xpm-torch.readthedocs.io/en/stable/huggingface.html) — export actions, pushing and loading models
 
 ## Features
 
@@ -23,6 +36,7 @@ from experimaestro import Param
 import torch
 import torch.nn as nn
 
+
 class MyModel(Module):
     input_dim: Param[int]
     hidden_dim: Param[int]
@@ -33,6 +47,7 @@ class MyModel(Module):
     def forward(self, x):
         return self.fc1(x)
 
+
 # Create config, then instance
 cfg = MyModel.C(input_dim=50, hidden_dim=100)
 model = cfg.instance()
@@ -40,6 +55,7 @@ model.initialize()
 
 # Save/load with safetensors
 from pathlib import Path
+
 model.save_model(Path("checkpoint/model"))
 model.load_model(Path("checkpoint/model"))
 ```

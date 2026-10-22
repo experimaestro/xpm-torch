@@ -44,7 +44,7 @@ class DirectInteraction(Interaction):
         return default
 
 
-# TODO: shouldn't this be a Task ? 
+# Open question: shouldn't this be a Task?
 class ExportAction(Action):
     """Export a trained model to HuggingFace Hub or a local directory.
 
@@ -93,9 +93,7 @@ class ExportAction(Action):
 
         hub = self.get_hub()
 
-        target = interaction.choice(
-            "target", "Export to:", ["HF Hub", "Local folder"]
-        )
+        target = interaction.choice("target", "Export to:", ["HF Hub", "Local folder"])
 
         if target == "HF Hub":
             repo_id = interaction.text(
