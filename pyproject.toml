@@ -1,7 +1,7 @@
 [project]
 name = "xpm-torch"
 dynamic = ["version"]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 keywords = ["PyTorch", "experiments", "experimaestro"]
 description = "Experimaestro module for Pytorch-based experiments"
 readme = "README.md"
