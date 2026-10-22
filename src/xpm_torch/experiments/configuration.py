@@ -14,7 +14,6 @@ from xpm_torch.optim import (
 )
 
 
-
 @configuration
 class TransformerOptimization:
     """Configuration for a transformer optimization"""
@@ -151,6 +150,7 @@ class TransformerOptimization:
 @configuration
 class Fabric:
     """Experiment Configuration for building a Fabric Config"""
+
     ## Lighnting Fabric training Configuration
     # see https://lightning.ai/docs/fabric/stable/api/generated/lightning.fabric.fabric.Fabric.html#lightning.fabric.fabric.Fabric
     strategy: str = "auto"
@@ -167,8 +167,8 @@ class Fabric:
 
     def get_config(self):
         return FabricConfiguration.C(
-                    strategy=self.strategy,
-                    precision=self.precision,
-                    accelerator=self.accelerator,
-                    devices=self.devices,
-                )
+            strategy=self.strategy,
+            precision=self.precision,
+            accelerator=self.accelerator,
+            devices=self.devices,
+        )

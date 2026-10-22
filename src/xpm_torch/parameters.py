@@ -135,7 +135,7 @@ class SubParametersIterator(ParametersIterator):
         # Copy the selection status from the sub-model iterator
         for element in self.iterator.iter():
             id_param = id(element.parameter)
-            
+
             if mp := model_params.get(id_param, None):
                 if mp.selected != element.selected:
                     model_params[id_param] = ParameterElement(
@@ -152,8 +152,7 @@ class NameMapper(Config, ABC):
     """Changes name of parameters"""
 
     @abstractmethod
-    def __call__(self, source: str) -> str:
-        ...
+    def __call__(self, source: str) -> str: ...
 
 
 class PrefixRenamer(NameMapper):
@@ -167,7 +166,7 @@ class PrefixRenamer(NameMapper):
 
     def __call__(self, source: str) -> str:
         if source.startswith(self.model):
-            return f"{self.data}{source[len(self.model):]}"
+            return f"{self.data}{source[len(self.model) :]}"
 
         return source
 
@@ -203,7 +202,7 @@ class PartialModuleLoader(PathSerializationLWTask):
                     logger.debug(f"Selected: {key} -> {name}")
 
                 assert key in data, (
-                    f"{key} is not in loaded parameters:" f"{', '.join(data.keys())}"
+                    f"{key} is not in loaded parameters:{', '.join(data.keys())}"
                 )
                 partial_data[name] = data[key]
 
@@ -241,9 +240,9 @@ class PartialModuleLoader(PathSerializationLWTask):
         :param selector: The selector to restrict the set of parameters
         :return: A new partial module loader
         """
-        assert (
-            module_loader.__xpm__.task is not None
-        ), "No task associated with the module_loader"
+        assert module_loader.__xpm__.task is not None, (
+            "No task associated with the module_loader"
+        )
 
         pml = PartialModuleLoader(
             selector=selector, value=value, path=module_loader.path, mapper=mapper
@@ -293,7 +292,7 @@ class SubModuleLoader(PathSerializationLWTask):
                     logger.debug(f"Selected: {key} -> {name}")
 
                 assert key in data, (
-                    f"{key} is not in loaded parameters:" f"{', '.join(data.keys())}"
+                    f"{key} is not in loaded parameters:{', '.join(data.keys())}"
                 )
                 partial_data[name] = data[key]
 
@@ -333,9 +332,9 @@ class SubModuleLoader(PathSerializationLWTask):
         :param selector: The selector to restrict the set of parameters
         :return: A new partial module loader
         """
-        assert (
-            module_loader.__xpm__.task is not None
-        ), "No task associated with the module_loader"
+        assert module_loader.__xpm__.task is not None, (
+            "No task associated with the module_loader"
+        )
 
         assert isinstance(module_loader, ModuleLoader)
 

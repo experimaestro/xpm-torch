@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,7 +26,6 @@ class PairwiseLoss(Config, nn.Module):
         context.add_loss(Loss(f"pair-{self.NAME}", value, self.weight))
 
     def compute(self, scores: Tensor, info: TrainerContext) -> Tensor:
-
         """Computes the loss
 
         :param scores: A (batch x 2) tensor (positive/negative)
@@ -35,8 +33,10 @@ class PairwiseLoss(Config, nn.Module):
         :return: a torch scalar
         """
         raise NotImplementedError()
-    
+
+
 ### Child Losses
+
 
 class CrossEntropyLoss(PairwiseLoss):
     r"""Cross-Entropy Loss
@@ -54,6 +54,7 @@ class CrossEntropyLoss(PairwiseLoss):
 
         \frac{w}{N} \sum_{(s^+,s-)} \log \frac{\exp(s^+)}{\exp(s^+)+\exp(s^-)}
     """
+
     NAME = "cross-entropy"
 
     def compute(self, rel_scores_by_record, info: TrainerContext):
@@ -83,6 +84,7 @@ class HingeLoss(PairwiseLoss):
         return F.relu(
             self.margin - rel_scores_by_record[:, 0] + rel_scores_by_record[:, 1]
         ).mean()
+
 
 class PointwiseCrossEntropyLoss(PairwiseLoss, EasyLogger):
     r"""Point-wise cross-entropy loss

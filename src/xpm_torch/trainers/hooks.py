@@ -6,6 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 class LayerFreezer(InitializationTrainingHook):
     """This training hook class can be used to freeze a subset of model
     parameters"""

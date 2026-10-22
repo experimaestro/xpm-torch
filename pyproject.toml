@@ -1,7 +1,7 @@
 [project]
 name = "xpm-torch"
 dynamic = ["version"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["PyTorch", "experiments", "experimaestro"]
 description = "Experimaestro module for Pytorch-based experiments"
 readme = "README.md"
@@ -59,3 +59,13 @@ version-file = "src/xpm_torch/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/xpm_torch"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "T20"]
+ignore = ["E501"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
