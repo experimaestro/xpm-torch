@@ -2,6 +2,7 @@ import torch
 from typing import NamedTuple
 from enum import Enum
 
+
 class Loss(NamedTuple):
     """A loss"""
 
@@ -19,7 +20,6 @@ class ModuleOutputType(Enum):
 
     PROBABILITY = 2
     """A probability, in ]0,1["""
-
 
 
 class BCEWithLogLoss(torch.autograd.Function):

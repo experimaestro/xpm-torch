@@ -46,20 +46,20 @@ class IterativeProcessor(Protocol, Generic[T, RT, ARGS, KWARGS]):
 
 
 class Processor(Protocol, Generic[T, ARGS, KWARGS]):
-    def __call__(self, batch: Sequence[T], *args: ARGS, **kwargs: KWARGS) -> None:
-        ...
+    def __call__(self, batch: Sequence[T], *args: ARGS, **kwargs: KWARGS) -> None: ...
 
 
 class Reducer(Protocol, Generic[T, RT, ARGS, KWARGS]):
     def __call__(
         self, batch: Sequence[T], value: RT, *args: ARGS, **kwargs: KWARGS
-    ) -> RT:
-        ...
+    ) -> RT: ...
 
 
 class BatcherWorker:
     def __init__(self, batch_size: int):
-        self.batch_size = batch_size #actually a micro-batch size, may be adapted dynamically
+        self.batch_size = (
+            batch_size  # actually a micro-batch size, may be adapted dynamically
+        )
 
     def pre_train_setup(self, probe_fn: Callable, fabric) -> None:
         """Optional one-time pre-training setup (e.g. fitting a memory model).
@@ -183,7 +183,9 @@ class PowerAdaptativeBatcherWorker(BatcherWorker):
         super().__init__(batch_size)
         self.max_batch_size = batch_size
         self.current_divider = 1
-        logger.info("[xpm_torch] Adaptative batcher: initial batch size is %d", self.batch_size)
+        logger.info(
+            "[xpm_torch] Adaptative batcher: initial batch size is %d", self.batch_size
+        )
 
     def get_ranges(self, batch_size):
         ranges = []
@@ -819,7 +821,10 @@ class PredictiveBatcherWorker(BatcherWorker):
             logger.warning(
                 "Predictive batcher: even min_batch_size=%d exceeds budget=%.2e "
                 "(dims=%s, predicted=%.2e). Using min_batch_size anyway.",
-                lo, budget_bytes, dims, self.predict({**dims, bsvar: lo}),
+                lo,
+                budget_bytes,
+                dims,
+                self.predict({**dims, bsvar: lo}),
             )
             return lo
         if fits(hi):
@@ -864,12 +869,14 @@ class PredictiveBatcherWorker(BatcherWorker):
         gradient-bucket all_reduce.
         """
         provider = self.batcher.dims_provider
-        device = fabric.device if fabric is not None else torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
+        device = (
+            fabric.device
+            if fabric is not None
+            else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         )
 
         is_rank_zero = (fabric is None) or (fabric.global_rank == 0)
-        world_size = (fabric.world_size if fabric is not None else 1)
+        world_size = fabric.world_size if fabric is not None else 1
 
         if is_rank_zero:
             logger.info(
@@ -888,7 +895,8 @@ class PredictiveBatcherWorker(BatcherWorker):
                     if is_oom_error(e):
                         logger.warning(
                             "Predictive batcher: probe OOM at dims=%s, skipping. (%s)",
-                            dims, e,
+                            dims,
+                            e,
                         )
                         garbage_collection_cuda()
                         continue
@@ -900,7 +908,8 @@ class PredictiveBatcherWorker(BatcherWorker):
                 )
                 logger.info(
                     "[xpm_torch] Predictive probe: dims=%s peak=%.2e bytes",
-                    dims, peak,
+                    dims,
+                    peak,
                 )
                 self.observe(dims, peak)
             self.fit()

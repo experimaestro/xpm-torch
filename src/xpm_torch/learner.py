@@ -520,6 +520,10 @@ class Learner(Task, EasyLogger):
             # -> allows listeners to process it and decide whether to stop or not
             yield self.context.state
 
+            # Synchronize metrics across all distributed ranks before reporting
+            if fabric and fabric.world_size > 1:
+                metrics.all_reduce(fabric)
+
             # Report metrics over the epoch, and log them to the monitoring backend
             # Note that this is done after the listeners are called, so that they can update the metrics if needed (e.g., with validation results)
             metrics.report(

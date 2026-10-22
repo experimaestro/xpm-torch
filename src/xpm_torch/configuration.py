@@ -16,7 +16,6 @@ class Strategy(Config, strategies.Strategy):
 
 
 class FabricConfigurationBase(Config, ABC):
-
     def get_fabric(self, **kwargs) -> L.Fabric:
         return self._get_fabric(**kwargs)
 
@@ -33,7 +32,7 @@ class FabricConfiguration(FabricConfigurationBase):
     https://lightning.ai/docs/fabric/stable/api/fabric_args.html
     """
 
-    #parameters - change Learner output
+    # parameters - change Learner output
     precision: Param[str] = field(default="32-true", ignore_default=True)
     """Precision to use, e.g., '16-mixed', 'bf16-mixed', '32-true':
     see Lightning documentation at https://lightning.ai/docs/fabric/stable/api/fabric_args.html#precision
@@ -66,7 +65,6 @@ class FabricConfiguration(FabricConfigurationBase):
 
     is_built = False
 
-
     def _get_fabric(self, **kwargs) -> L.Fabric:
         """Builds the Fabric object and set the torch.float32 matmul precision based on the configuration.
         This is called by the Learner before launching the training loop
@@ -90,12 +88,14 @@ class FabricConfiguration(FabricConfigurationBase):
                 )
 
         if self.torch_fp32_precision is None:
-            #auto set torch.float32 precision based on fabric precision (if not set explicitly)
+            # auto set torch.float32 precision based on fabric precision (if not set explicitly)
             if self.precision in ["16-mixed", "bf16-mixed"]:
                 self.torch_fp32_precision = "medium"
             else:
                 self.torch_fp32_precision = "high"
-            logger.info(f"Setting torch.fp32 matmul precision to '{self.torch_fp32_precision}' based on fabric precision '{self.precision}'")
+            logger.info(
+                f"Setting torch.fp32 matmul precision to '{self.torch_fp32_precision}' based on fabric precision '{self.precision}'"
+            )
 
         torch.set_float32_matmul_precision(self.torch_fp32_precision)
 
@@ -111,7 +111,11 @@ class FabricConfiguration(FabricConfigurationBase):
             elif self.devices == "auto" and torch.cuda.is_available():
                 num_devices = torch.cuda.device_count()
 
-        if (num_devices > 1 or self.num_nodes > 1) and strategy in (None, "auto", "ddp"):
+        if (num_devices > 1 or self.num_nodes > 1) and strategy in (
+            None,
+            "auto",
+            "ddp",
+        ):
             strategy = "ddp_find_unused_parameters_true"
             logger.info(
                 f"[Fabric] Multi-device training detected ({num_devices} devices). "
@@ -119,7 +123,9 @@ class FabricConfiguration(FabricConfigurationBase):
             )
 
         if isinstance(strategy, str) and "ddp" in strategy.lower():
-            if hasattr(torch.autograd.graph, "set_warn_on_accumulate_grad_stream_mismatch"):
+            if hasattr(
+                torch.autograd.graph, "set_warn_on_accumulate_grad_stream_mismatch"
+            ):
                 torch.autograd.graph.set_warn_on_accumulate_grad_stream_mismatch(False)
 
         fabric = L.Fabric(
@@ -128,7 +134,9 @@ class FabricConfiguration(FabricConfigurationBase):
             strategy=strategy,
             num_nodes=self.num_nodes,
             precision=self.precision,
-            **kwargs
+            **kwargs,
         )
-        logging.info(f"Using Fabric with accelerator={fabric.accelerator.__class__.__name__}, devices={fabric.world_size}, strategy={fabric.strategy.__class__.__name__}")
+        logging.info(
+            f"Using Fabric with accelerator={fabric.accelerator.__class__.__name__}, devices={fabric.world_size}, strategy={fabric.strategy.__class__.__name__}"
+        )
         return fabric

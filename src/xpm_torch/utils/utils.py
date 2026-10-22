@@ -123,7 +123,6 @@ class Handler:
         return handler(key)
 
 
-
 def to_device(obj, device: Union[torch.device, str]):
     """Move tensors to device recursively. Handles nested structures.
 
@@ -351,4 +350,3 @@ def build_model_card(
     card.save(save_path / "README.md")
     logging.info(f"Model card written to {save_path / 'README.md'}")
     return card
-

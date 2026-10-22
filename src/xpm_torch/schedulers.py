@@ -80,7 +80,6 @@ class LinearWithWarmupAndMaxEpochs(Scheduler):
         )
 
 
-
 class CosineWithWarmup(Scheduler):
     """Cosine schedule with warmup
 

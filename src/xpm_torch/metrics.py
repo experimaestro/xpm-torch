@@ -103,6 +103,51 @@ class Metrics:
         for value in other.metrics.values():
             self.add(value)
 
+    def all_reduce(self, fabric=None) -> "Metrics":
+        """All-reduces metrics across all Fabric ranks so each rank has global statistics."""
+        if fabric is None or getattr(fabric, "world_size", 1) <= 1:
+            return self
+
+        import torch
+        import torch.distributed as dist
+
+        local_keys = sorted(
+            [k for k, m in self.metrics.items() if isinstance(m, ScalarMetric)]
+        )
+        if dist.is_available() and dist.is_initialized():
+            gathered_keys = [None] * fabric.world_size
+            dist.all_gather_object(gathered_keys, local_keys)
+            all_keys = sorted(set().union(*gathered_keys))
+        else:
+            all_keys = local_keys
+
+        if not all_keys:
+            return self
+
+        rows = []
+        for k in all_keys:
+            m = self.metrics.get(k)
+            if isinstance(m, ScalarMetric):
+                rows.append([m.sum, float(m.count)])
+            else:
+                rows.append([0.0, 0.0])
+
+        data = torch.tensor(rows, dtype=torch.float64, device=fabric.device)
+        reduced = fabric.all_reduce(data, reduce_op="sum")
+
+        for i, k in enumerate(all_keys):
+            r_sum = float(reduced[i, 0].item())
+            r_count = int(round(reduced[i, 1].item()))
+            if k in self.metrics and isinstance(self.metrics[k], ScalarMetric):
+                self.metrics[k].sum = r_sum
+                self.metrics[k].count = r_count
+            else:
+                self.metrics[k] = ScalarMetric(
+                    k, (r_sum / r_count) if r_count > 0 else 0.0, r_count
+                )
+
+        return self
+
     def report(self, step, logger: MetricsLogger, prefix):
         for value in self.metrics.values():
             value.report(step, logger, prefix)

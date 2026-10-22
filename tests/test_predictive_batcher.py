@@ -63,9 +63,7 @@ def test_canonicalize_equivalent_inputs_produce_same_string():
         "c + b*bs*l + a*l**2*bs",
         "a*l**2*bs + c + b*l*bs",
     ]
-    results = {
-        _canonicalize_formula(v, {"a", "b", "c"}, {"bs", "l"}) for v in variants
-    }
+    results = {_canonicalize_formula(v, {"a", "b", "c"}, {"bs", "l"}) for v in variants}
     assert len(results) == 1, f"non-canonical outputs: {results}"
 
 
@@ -243,8 +241,9 @@ def _make_hetero_batcher(packer=None):
     return PredictiveBatcher.C(**kwargs)
 
 
-def _fit_hetero_worker(batcher, truth=(2.0, 3.0, 100.0), batch_size=64,
-                       budget=None, max_batch_size=None):
+def _fit_hetero_worker(
+    batcher, truth=(2.0, 3.0, 100.0), batch_size=64, budget=None, max_batch_size=None
+):
     """Build and manually fit a worker against a synthetic ground truth, then
     monkeypatch its budget so packing decisions are deterministic."""
     PredictiveBatcher.__validate__(batcher)
@@ -268,8 +267,7 @@ def test_uniform_packer_uniform_slices():
     # All records l=128. Budget allows bs=4 at l=128.
     truth = (1.0, 0.0, 0.0)  # cost = bs * l**2
     budget = 4 * 128**2 + 1.0  # fits 4 records of l=128
-    worker = _fit_hetero_worker(batcher, truth=truth, budget=budget,
-                                max_batch_size=16)
+    worker = _fit_hetero_worker(batcher, truth=truth, budget=budget, max_batch_size=16)
     records = [128] * 12
     microbatches = list(worker._pack(records))
     assert all(len(m) == 4 for m in microbatches[:-1]), microbatches
@@ -282,8 +280,7 @@ def test_adaptive_packer_fills_each_microbatch():
     # cost = bs * l**2; budget = 4 * 128**2 → at l=128, 4 fit; at l=32, 64 fit.
     truth = (1.0, 0.0, 0.0)
     budget = 4 * 128**2 + 1.0
-    worker = _fit_hetero_worker(batcher, truth=truth, budget=budget,
-                                max_batch_size=64)
+    worker = _fit_hetero_worker(batcher, truth=truth, budget=budget, max_batch_size=64)
 
     # Order: 4 records of l=128, then 16 records of l=32. Without sort, packing
     # in input order: first microbatch gets 4 l=128 records (filled), then the
@@ -310,10 +307,12 @@ def test_adaptive_packer_sort_by_reduces_microbatch_count():
     # Interleaved heterogeneous records — input order is bad for packing.
     records = [32, 128, 32, 128, 32, 32, 128, 32, 128, 32, 32, 32]
 
-    w_unsorted = _fit_hetero_worker(batcher_unsorted, truth=truth,
-                                    budget=budget, max_batch_size=64)
-    w_sorted = _fit_hetero_worker(batcher_sorted, truth=truth,
-                                  budget=budget, max_batch_size=64)
+    w_unsorted = _fit_hetero_worker(
+        batcher_unsorted, truth=truth, budget=budget, max_batch_size=64
+    )
+    w_sorted = _fit_hetero_worker(
+        batcher_sorted, truth=truth, budget=budget, max_batch_size=64
+    )
 
     unsorted_chunks = list(w_unsorted._pack(records))
     sorted_chunks = list(w_sorted._pack(records))
@@ -335,8 +334,7 @@ def test_adaptive_packer_single_record_over_budget_emits_alone():
     truth = (1.0, 0.0, 0.0)
     # Budget too small even for one l=256 record (cost = 1 * 256**2 = 65536).
     budget = 1000.0
-    worker = _fit_hetero_worker(batcher, truth=truth, budget=budget,
-                                max_batch_size=64)
+    worker = _fit_hetero_worker(batcher, truth=truth, budget=budget, max_batch_size=64)
     records = [256, 256]
     microbatches = list(worker._pack(records))
     # Two singleton microbatches (each emitted as fallback).

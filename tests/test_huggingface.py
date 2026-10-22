@@ -57,6 +57,7 @@ def test_torch_hf_hub_loading(tmp_path):
     loaded_loader_instance.execute()
     assert torch.allclose(expected_out, loaded_loader_instance.model(x))
 
+
 def test_torch_hf_hub_save_empty_parameters(tmp_path):
     """Test save_pretrained when the parameters path is problematic."""
     cfg = DummyModule.C(dim=10)
