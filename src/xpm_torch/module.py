@@ -306,13 +306,16 @@ class SimpleModuleLoader(ModuleLoader):
         """Serialize the path directly to model.safetensors at the root"""
         path = Path(self.path)
 
-        # Ensure path exists and is not the current directory (resolved from empty string)
-        if not path.exists() or path.resolve() == Path.cwd().resolve():
-            raise FileNotFoundError(
-                f"Cannot serialize SimpleModuleLoader: path '{self.path}' does not exist or is the current directory"
-            )
+        # Ensure path exists and is not the current directory when exporting to disk
+        if context.save_directory is not None:
+            if not path.exists() or path.resolve() == Path.cwd().resolve():
+                raise FileNotFoundError(
+                    f"Cannot serialize SimpleModuleLoader: path '{self.path}' does not exist or is the current directory"
+                )
 
-        target_name = path.name if path.is_file() else "model.safetensors"
+        target_name = (
+            path.name if path.is_file() or (not path.exists() and path.suffix) else "model.safetensors"
+        )
 
         # If it's a SentenceTransformers directory (containing modules.json), serialize as folder
         if path.is_dir() and (path / "modules.json").is_file():
