@@ -20,14 +20,118 @@ T = TypeVar("T")
 class ShardedIterableDataset(IterableDataset[T]):
     """Abstract base for datasets that support multi-GPU + multi-worker sharding.
 
-    Subclasses implement ``iter_shard(shard_id, num_shards)`` to yield items for
-    a specific shard.  Sharding combines two levels:
+    Supports two modes of operation:
+    1. **Sequence Mode** (out-of-the-box elastic sharding):
+       Pass an indexable ``source`` (HuggingFace Dataset, PyArrow table, list, array)
+       or implement ``__len__`` and ``__getitem__``. ``iter_shard()`` automatically
+       executes zero-skip, zero-duplicate elastic step-based sharding across arbitrary
+       GPU and DataLoader worker counts.
+    2. **Custom / Stream Mode**:
+       Subclasses override ``iter_shard(shard_id, num_shards)`` to yield items for
+       a specific shard (e.g. streaming line-delimited files or generators).
 
+    Sharding combines two levels:
     1. **GPU-level** (``dist.get_rank()`` / ``dist.get_world_size()``)
     2. **DataLoader worker-level** (``get_worker_info()``)
-
     so that every worker on every GPU processes a disjoint subset of data.
     """
+
+    def __init__(
+        self,
+        source: Optional[Any] = None,
+        sample_builder: Optional[Callable[[Any], T]] = None,
+        global_batch_size: int = 1,
+    ):
+        super().__init__()
+        if global_batch_size <= 0:
+            raise ValueError(
+                f"[{type(self).__name__}] `global_batch_size` must be a positive integer, got {global_batch_size}."
+            )
+        self.source = source
+        self.sample_builder = sample_builder
+        self._global_batch_size = global_batch_size
+        self.start_step: int = 0
+        self._current_step: int = 0
+        self._items_yielded: int = 0
+
+    @property
+    def global_batch_size(self) -> int:
+        return self._global_batch_size
+
+    @global_batch_size.setter
+    def global_batch_size(self, value: int):
+        if value <= 0:
+            raise ValueError(
+                f"[{type(self).__name__}] `global_batch_size` must be positive, got {value}."
+            )
+        self._global_batch_size = value
+
+    def decompose_shard(
+        self, shard_id: int, num_shards: int
+    ) -> tuple[int, int, int, int]:
+        """Decomposes (shard_id, num_shards) into (rank, world_size, worker_id, num_workers)."""
+        if num_shards <= 0:
+            raise ValueError(
+                f"[{type(self).__name__}] `num_shards` must be >= 1, got {num_shards}."
+            )
+        if not (0 <= shard_id < num_shards):
+            raise ValueError(
+                f"[{type(self).__name__}] `shard_id` ({shard_id}) out of bounds for `num_shards` ({num_shards})."
+            )
+
+        worker_info = get_worker_info()
+        num_workers = worker_info.num_workers if worker_info is not None else 1
+        worker_id = worker_info.id if worker_info is not None else 0
+        world_size = max(1, num_shards // num_workers)
+        rank = shard_id // num_workers
+        return rank, world_size, worker_id, num_workers
+
+    def log_worker_init(
+        self,
+        shard_id: int,
+        num_shards: int,
+        total_samples: Optional[int] = None,
+    ):
+        """Logs worker initialization with rank, world_size, worker_id, global_step, and sample offset."""
+        rank, world_size, worker_id, num_workers = self.decompose_shard(
+            shard_id, num_shards
+        )
+        local_batch_size = max(1, self.global_batch_size // world_size)
+        if total_samples:
+            init_offset = (
+                self.start_step * self.global_batch_size + rank * local_batch_size
+            ) % total_samples
+            init_epoch = (self.start_step * self.global_batch_size) // total_samples
+            logger.info(
+                "[%s] Initialized worker %d/%d on rank %d/%d (shard %d/%d): "
+                "resuming at global step %d (sample index %d / %d, epoch %d, local_bs=%d)",
+                type(self).__name__,
+                worker_id,
+                num_workers,
+                rank,
+                world_size,
+                shard_id,
+                num_shards,
+                self.start_step,
+                init_offset,
+                total_samples,
+                init_epoch,
+                local_batch_size,
+            )
+        else:
+            logger.info(
+                "[%s] Initialized worker %d/%d on rank %d/%d (shard %d/%d): "
+                "resuming at global step %d (local_bs=%d)",
+                type(self).__name__,
+                worker_id,
+                num_workers,
+                rank,
+                world_size,
+                shard_id,
+                num_shards,
+                self.start_step,
+                local_batch_size,
+            )
 
     def _resolve_sharding(self) -> tuple[int, int]:
         """Return ``(shard_id, num_shards)`` for the current context."""
@@ -74,18 +178,93 @@ class ShardedIterableDataset(IterableDataset[T]):
 
     def __iter__(self) -> Iterator[T]:
         shard_id, num_shards = self._resolve_sharding()
-        return self.iter_shard(shard_id, num_shards)
+        self._items_yielded = 0
+        for item in self.iter_shard(shard_id, num_shards):
+            self._items_yielded += 1
+            yield item
 
-    @abstractmethod
     def iter_shard(self, shard_id: int, num_shards: int) -> Iterator[T]:
-        """Yield items for the given shard."""
-        ...
+        """Yield items for the given shard - Default implementation uses elastic step-based sharding if ``source`` is provided.
+
+        If a sequence ``source`` was provided (or this object implements ``__len__`` and ``__getitem__``),
+        runs the elastic step-based sharding loop. Otherwise, raises ``NotImplementedError``.
+        """
+        src = self.source if self.source is not None else self
+        is_sequence = hasattr(src, "__len__") and hasattr(src, "__getitem__")
+
+        if not is_sequence and self.source is not None:
+            raise TypeError(
+                f"[{type(self).__name__}] `source` must be an indexable sequence supporting `__len__` and `__getitem__` "
+                f"(got {type(self.source).__name__}). For streaming data sources, override `iter_shard(shard_id, num_shards)`."
+            )
+
+        if is_sequence:
+            data_len = len(src)
+            if data_len == 0:
+                raise ValueError(
+                    f"[{type(self).__name__}] Cannot shard an empty dataset (len=0)."
+                )
+
+            rank, world_size, worker_id, num_workers = self.decompose_shard(
+                shard_id, num_shards
+            )
+            local_batch_size = max(1, self.global_batch_size // world_size)
+            self.log_worker_init(shard_id, num_shards, data_len)
+
+            step = self.start_step + worker_id
+            while True:
+                self._current_step = step
+                step_offset = step * self.global_batch_size + rank * local_batch_size
+                for i in range(local_batch_size):
+                    sample_idx = (step_offset + i) % data_len
+                    item = src[sample_idx]
+                    yield self.sample_builder(item) if self.sample_builder else item
+                step += num_workers
+        else:
+            raise NotImplementedError(
+                f"[{type(self).__name__}] does not implement `iter_shard(shard_id, num_shards)` "
+                "and did not provide an indexable `source`. You must either provide `source` to "
+                "ShardedIterableDataset(...) or override `iter_shard` in your subclass."
+            )
+
+    def set_resume_step(self, step: int):
+        """Set the global step to resume from."""
+        self.start_step = step
+        self._current_step = step
 
     def state_dict(self) -> Dict[str, Any]:
-        return {}
+        """Serialize state for checkpointing."""
+        if (
+            self.source is None
+            and self._items_yielded > 0
+            and self._current_step == self.start_step
+        ):
+            logger.warning(
+                "[%s] Yielded %d items, but `self._current_step` was never updated from start_step=%d. "
+                "If this subclass implements custom `iter_shard`, ensure it updates `self._current_step` "
+                "so that checkpoint state can be restored accurately.",
+                type(self).__name__,
+                self._items_yielded,
+                self.start_step,
+            )
+        return {"step": self._current_step}
 
     def load_state_dict(self, state: Dict[str, Any]):
-        pass
+        """Restore state from checkpoint."""
+        if not isinstance(state, dict):
+            raise TypeError(
+                f"[{type(self).__name__}] Expected state to be a dict, got {type(state).__name__}"
+            )
+        if "step" not in state:
+            logger.warning(
+                "[%s] `step` key missing in loaded state dict (keys: %s). "
+                "Stateful resumption cannot position the dataloader step.",
+                type(self).__name__,
+                list(state.keys()),
+            )
+        else:
+            self.start_step = state["step"]
+            self._current_step = state["step"]
 
 
 class FileShardedDataset(ShardedIterableDataset[T]):
@@ -287,25 +466,23 @@ class QueryGroupedFileDataset(FileShardedDataset[T]):
             self._position = f.tell()
 
 
-class IndexedDataset(FileShardedDataset[T]):
-    """Wraps a random-accessible sequence (list, array) as a sharded dataset."""
+class IndexedDataset(ShardedIterableDataset[T]):
+    """Wraps a random-accessible sequence (list, array) as an elastic sharded dataset."""
 
-    def __init__(self, source: Any):
-        super().__init__()
-        self.source = source
-        self._position: int = 0
+    def __init__(
+        self,
+        source: Any,
+        sample_builder: Optional[Callable[[Any], T]] = None,
+        global_batch_size: int = 1,
+    ):
+        super().__init__(
+            source=source,
+            sample_builder=sample_builder,
+            global_batch_size=global_batch_size,
+        )
 
     def data_size(self) -> int:
         return len(self.source)
-
-    def position(self) -> int:
-        return self._position
-
-    def iter_from(self, start: int, end: int) -> Iterator[T]:
-        for i in range(start, end):
-            self._position = i
-            yield self.source[i]
-        self._position = end
 
 
 class TransformDataset(ShardedIterableDataset[T]):
@@ -322,6 +499,16 @@ class TransformDataset(ShardedIterableDataset[T]):
         self.inner = inner
         self.transform = transform
 
+    @property
+    def global_batch_size(self) -> int:
+        return getattr(self.inner, "global_batch_size", self._global_batch_size)
+
+    @global_batch_size.setter
+    def global_batch_size(self, value: int):
+        self._global_batch_size = value
+        if hasattr(self.inner, "global_batch_size"):
+            self.inner.global_batch_size = value
+
     def iter_shard(self, shard_id: int, num_shards: int) -> Iterator[T]:
         for item in self.inner.iter_shard(shard_id, num_shards):
             transformed = self.transform(item)
@@ -337,6 +524,10 @@ class TransformDataset(ShardedIterableDataset[T]):
                         yield sub_item
             else:
                 yield transformed
+
+    def set_resume_step(self, step: int):
+        super().set_resume_step(step)
+        self.inner.set_resume_step(step)
 
     def state_dict(self) -> Dict[str, Any]:
         return self.inner.state_dict()
@@ -357,6 +548,20 @@ class InfiniteDataset(ShardedIterableDataset[T]):
         super().__init__()
         self.inner = inner
 
+    @property
+    def global_batch_size(self) -> int:
+        return getattr(self.inner, "global_batch_size", self._global_batch_size)
+
+    @global_batch_size.setter
+    def global_batch_size(self, value: int):
+        self._global_batch_size = value
+        if hasattr(self.inner, "global_batch_size"):
+            self.inner.global_batch_size = value
+
+    def set_resume_step(self, step: int):
+        super().set_resume_step(step)
+        self.inner.set_resume_step(step)
+
     def iter_shard(self, shard_id: int, num_shards: int) -> Iterator[T]:
         while True:
             yielded = False
@@ -371,3 +576,6 @@ class InfiniteDataset(ShardedIterableDataset[T]):
 
     def load_state_dict(self, state: Dict[str, Any]):
         self.inner.load_state_dict(state)
+
+
+ElasticShardedDataset = ShardedIterableDataset
