@@ -101,6 +101,9 @@ class TrainState:
 
     def load(self, path, onlyinfo=False):
         """Loads the state from disk"""
+        with (path / "info.json").open("rt") as fp:
+            self.load_state_dict(json.load(fp))
+
         if not onlyinfo:
             model_dir = path / self.MODEL_DIR
             if model_dir.exists():
@@ -116,11 +119,15 @@ class TrainState:
                         path / self.MODEL_PATH, map_location="cpu", weights_only=True
                     )
                 )
-            self.trainer.load_state_dict(torch.load(path / "trainer.pth"))
-            self.optimizer.load_state_dict(torch.load(path / "optimizer.pth"))
+            if (path / "trainer.pth").exists():
+                self.trainer.load_state_dict(
+                    torch.load(path / "trainer.pth", weights_only=False)
+                )
+            if (path / "optimizer.pth").exists():
+                self.optimizer.load_state_dict(
+                    torch.load(path / "optimizer.pth", weights_only=False)
+                )
 
-        with (path / "info.json").open("rt") as fp:
-            self.load_state_dict(json.load(fp))
         self.path = path
         self.cached = True
 

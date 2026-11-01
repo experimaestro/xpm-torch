@@ -1,8 +1,11 @@
 from abc import abstractmethod
 from typing import Dict, Iterator, List, Optional
+import os
+import logging
 from experimaestro import Config, Param, Meta, field
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 import numpy as np
 
 from lightning.fabric.wrappers import _FabricDataLoader
@@ -17,6 +20,8 @@ from xpm_torch.trainers.context import (
     TrainerContext,
 )
 from torchdata.stateful_dataloader import StatefulDataLoader
+
+logger = logging.getLogger(__name__)
 
 
 class Trainer(Config, EasyLogger):
@@ -129,6 +134,9 @@ class LossTrainer(Trainer):
 
     def _create_dataloader(self, dataset, collate_fn):
         """Create a StatefulDataLoader from a dataset and collate function."""
+        if hasattr(dataset, "global_batch_size"):
+            dataset.global_batch_size = self.batch_size
+
         batch_size = (
             self.context.get_local_batch_size(self.batch_size)
             if hasattr(self, "context") and self.context is not None
@@ -149,22 +157,152 @@ class LossTrainer(Trainer):
         return iter(self.dataloader)
 
     def load_state_dict(self, state: Dict):
-        if "dataloader" in state and self.dataloader is not None:
-            if isinstance(self.dataloader, _FabricDataLoader):
-                # If the dataloader is wrapped with Fabric, we need to load the state dict into the original dataloader
-                self.dataloader._dataloader.load_state_dict(state["dataloader"])
-            else:
-                self.dataloader.load_state_dict(state["dataloader"])
+        if self.dataloader is None:
+            return
+
+        target_dl = (
+            self.dataloader._dataloader
+            if isinstance(self.dataloader, _FabricDataLoader)
+            else self.dataloader
+        )
+
+        global_step = state.get("global_step")
+        if (
+            global_step is None
+            and hasattr(self, "context")
+            and self.context is not None
+            and hasattr(self.context, "state")
+            and self.context.state is not None
+        ):
+            global_step = self.context.state.steps
+
+        if global_step is not None:
+            dataset = getattr(target_dl, "dataset", None)
+            if dataset is not None and hasattr(dataset, "set_resume_step"):
+                logger.info(
+                    "LossTrainer: Setting dataset resume step to global_step=%d",
+                    global_step,
+                )
+                dataset.set_resume_step(global_step)
+
+        if dist.is_available() and dist.is_initialized():
+            current_world_size = dist.get_world_size()
+            rank = dist.get_rank()
+        elif (
+            hasattr(self, "context")
+            and self.context is not None
+            and self.context.fabric is not None
+        ):
+            current_world_size = self.context.fabric.world_size
+            rank = self.context.fabric.global_rank
+        else:
+            rank = int(
+                os.environ.get(
+                    "SLURM_PROCID",
+                    os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")),
+                )
+            )
+            current_world_size = int(
+                os.environ.get(
+                    "SLURM_NTASKS",
+                    os.environ.get(
+                        "WORLD_SIZE", os.environ.get("LOCAL_WORLD_SIZE", "1")
+                    ),
+                )
+            )
+
+        saved_world_size = state.get("world_size")
+        saved_num_workers = state.get("num_workers")
+
+        topology_changed = False
+        if saved_world_size is not None and saved_world_size != current_world_size:
+            topology_changed = True
+        if saved_num_workers is not None and saved_num_workers != self.num_workers:
+            topology_changed = True
+
+        if topology_changed:
+            logger.info(
+                "LossTrainer: Resuming with changed topology (saved world_size=%s, num_workers=%s vs "
+                "current world_size=%s, num_workers=%s). "
+                "Skipping StatefulDataLoader worker snapshots and resuming via dataset step offset (global_step=%s).",
+                saved_world_size,
+                saved_num_workers,
+                current_world_size,
+                self.num_workers,
+                global_step,
+            )
+            return
+
+        if "dataloader" in state:
+            dl_state = state["dataloader"]
+            if rank > 0 and isinstance(dl_state, dict):
+                import copy
+
+                dl_state = copy.deepcopy(dl_state)
+                # Offset _base_seed for non-zero ranks (nested in _snapshot._main_snapshot or top-level)
+                if "_snapshot" in dl_state and isinstance(dl_state["_snapshot"], dict):
+                    main_snap = dl_state["_snapshot"].get("_main_snapshot", {})
+                    if (
+                        isinstance(main_snap, dict)
+                        and "_base_seed" in main_snap
+                        and main_snap["_base_seed"] is not None
+                    ):
+                        main_snap["_base_seed"] = (
+                            main_snap["_base_seed"] + rank * 100_000
+                        )
+                elif "_base_seed" in dl_state and dl_state["_base_seed"] is not None:
+                    dl_state["_base_seed"] = dl_state["_base_seed"] + rank * 100_000
+
+            try:
+                target_dl.load_state_dict(dl_state)
+            except Exception as e:
+                logger.warning(
+                    "Failed to restore StatefulDataLoader state dict (e.g. worker mismatch): %s. "
+                    "Relying on dataset step offset (global_step=%s) for resumption.",
+                    e,
+                    global_step,
+                )
 
     def state_dict(self):
         assert self.dataloader is not None, "dataloader not initialized"
         if isinstance(self.dataloader, _FabricDataLoader):
-            # If the dataloader is wrapped with Fabric, we need to get the state dict from the original dataloader
             dataloader_state = self.dataloader._dataloader.state_dict()
         else:
             dataloader_state = self.dataloader.state_dict()
 
-        return {"dataloader": dataloader_state}
+        if dist.is_available() and dist.is_initialized():
+            world_size = dist.get_world_size()
+        elif (
+            hasattr(self, "context")
+            and self.context is not None
+            and self.context.fabric is not None
+        ):
+            world_size = self.context.fabric.world_size
+        else:
+            world_size = int(
+                os.environ.get(
+                    "SLURM_NTASKS",
+                    os.environ.get(
+                        "WORLD_SIZE", os.environ.get("LOCAL_WORLD_SIZE", "1")
+                    ),
+                )
+            )
+
+        global_step = (
+            self.context.state.steps
+            if hasattr(self, "context")
+            and self.context is not None
+            and hasattr(self.context, "state")
+            and self.context.state is not None
+            else 0
+        )
+
+        return {
+            "dataloader": dataloader_state,
+            "global_step": global_step,
+            "world_size": world_size,
+            "num_workers": self.num_workers,
+        }
 
     def pre_train_setup(self, fabric):
         """Drive batcher pre-train setup (e.g. profiling for a predictive
