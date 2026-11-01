@@ -338,9 +338,11 @@ class Learner(Task, EasyLogger):
         )
 
         if self.optimizer.optimizers:
-            self.optimizer.optimizers = list(
-                fabric.setup_optimizers(*self.optimizer.optimizers)
-            )
+            # Fabric returns a single optimizer (not a tuple) when given one
+            optimizers = fabric.setup_optimizers(*self.optimizer.optimizers)
+            if not isinstance(optimizers, (list, tuple)):
+                optimizers = [optimizers]
+            self.optimizer.optimizers = list(optimizers)
         else:
             self.logger.error(
                 "No optimizers were initialized; training will not update model parameters."
