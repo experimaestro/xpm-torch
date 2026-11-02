@@ -138,7 +138,9 @@ class TrainState:
         # Copy model dir or legacy model.pth
         model_dir = self.path / self.MODEL_DIR
         if model_dir.exists():
-            shutil.copytree(model_dir, path / self.MODEL_DIR)
+            # Hard-link instead of copying: checkpoints are immutable, and
+            # copy_file_range (used by shutil on Python 3.14) can hang on NFS
+            shutil.copytree(model_dir, path / self.MODEL_DIR, copy_function=os.link)
         else:
             os.link(self.path / self.MODEL_PATH, path / self.MODEL_PATH)
 
