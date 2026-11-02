@@ -5,7 +5,6 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Iterator, List, NamedTuple, Any, Optional
 from experimaestro import (
-    Task,
     Config,
     Param,
     pathgenerator,
@@ -13,6 +12,7 @@ from experimaestro import (
     tqdm,
     field,
     Meta,
+    ResumableTask,
 )
 
 import lightning as L
@@ -164,7 +164,7 @@ class LearnerOutput(NamedTuple):
     checkpoints: Dict[str, Any]
 
 
-class Learner(Task, EasyLogger):
+class Learner(ResumableTask, EasyLogger):
     """Model Learner
 
     The learner task is generic, and takes two main arguments: (1) the model
