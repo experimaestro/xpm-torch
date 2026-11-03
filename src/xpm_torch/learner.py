@@ -225,7 +225,6 @@ class Learner(ResumableTask, EasyLogger):
         assert len(set(listener.id for listener in self.listeners)) == len(
             self.listeners
         ), "IDs of listeners should be unique"
-        return super().__validate__()
 
     def __submit__(self, dep, add_action):
         """Submit the learner task and register export actions."""
