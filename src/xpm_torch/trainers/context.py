@@ -18,6 +18,12 @@ from experimaestro.utils import cleanupdir
 from xpm_torch.context import InitializationHook, Hook, Context
 from xpm_torch.metrics import Metric, Metrics, MetricsLogger
 from xpm_torch.losses import Loss
+from xpm_torch.trainers.checkpoints import (
+    checkpoint_epoch,
+    list_checkpoints,
+    remove_checkpoints,
+    verify_checkpoint,
+)
 
 if TYPE_CHECKING:
     from xpm_torch.learner import ScheduledOptimizer, Module
@@ -379,15 +385,29 @@ class TrainerContext(Context):
         # Save
         self.state.save(path)
 
-        # Cleanup if needed
-        if self.oldstate and self.oldstate.path:
-            try:
-                rmtree(self.oldstate.path)
-            except OSError as e:
-                # We continue the learning process in those cases
-                logger.error("OS Error while trying to remove directory %s", e)
+        # Only the latest checkpoint is kept: remove all the older ones once
+        # the new one has been checked to load properly. We cannot rely on the
+        # previous epoch state (``oldstate``) since it is only saved when
+        # ``checkpoint_interval == 1``; scanning the folder also removes
+        # checkpoints left over by an interrupted/resumed run.
+        problems = verify_checkpoint(path)
+        if problems:
+            logger.error(
+                "Checkpoint %s does not load properly, keeping the older ones: %s",
+                path,
+                "; ".join(problems),
+            )
+            return
+        self.remove_old_checkpoints(self.epoch)
 
-            self.oldstate = None
+    def remove_old_checkpoints(self, epoch: int):
+        """Removes the checkpoints whose epoch is strictly lower than ``epoch``
+
+        Listener copies (e.g. best models) and ``last`` are hard links, so
+        they are not affected."""
+        remove_checkpoints(
+            p for p in list_checkpoints(self.path) if checkpoint_epoch(p) < epoch
+        )
 
     def copy(self, path: Path):
         """Copy the state into another folder"""

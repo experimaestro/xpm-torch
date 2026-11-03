@@ -63,5 +63,8 @@ line-length = 88
 select = ["E", "F", "W", "C90", "T20"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["T20"]  # command-line scripts report with print
+
 [tool.ruff.lint.mccabe]
 max-complexity = 25
