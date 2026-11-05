@@ -14,7 +14,7 @@ dependencies = [
     "safetensors>=0.4",
     "tensorboard>=2.21",
     "torchdata>=0.10",
-    "xpm-mlboard[tensorboard]>=0.2.0",
+    "xpm-mlboard[tensorboard]>=0.4.0",
 ]
 
 [project.scripts]

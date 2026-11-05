@@ -3504,14 +3504,14 @@ wheels = [
 
 [[package]]
 name = "xpm-mlboard"
-version = "0.3.1"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "experimaestro" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/00/bc/8ae944ea096bbb6ebb4716bea9fdea1e61f135f1986ece6cc8576602b12a/xpm_mlboard-0.3.1.tar.gz", hash = "sha256:418dd7d15916d3b8271984ab4747aeb09993a8344652bb46db48c7d256f6c366", size = 132775, upload-time = "2026-10-20T17:45:44.278Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/4c/42e35c10cf84c8cc18f087d357e4b46b16d215936e13c56636c35208e777/xpm_mlboard-0.4.0.tar.gz", hash = "sha256:3882ddd2fd7e750a01042f76bbc09022984ff496de4f12dfd5c2dcd17be8bd64", size = 152482, upload-time = "2026-11-05T08:46:36.99Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/89/7a47eab0f7134b4253c7dd8b0cdbb95f627ef974803557577c793737ce1c/xpm_mlboard-0.3.1-py3-none-any.whl", hash = "sha256:7e6581b6dc51cf4305694d6190fd66557d949e343df8e08e5de0664efc821e77", size = 13056, upload-time = "2026-10-20T17:45:43.002Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/38/f3fa3721469a30ea7759c6f8e981b0c0f3f6be9224018d0f968518aa9867/xpm_mlboard-0.4.0-py3-none-any.whl", hash = "sha256:457b6160ae413ba8de34eb4762b6b3e92356e509331e0feb6da9071c4f4f24fa", size = 30306, upload-time = "2026-11-05T08:46:35.671Z" },
 ]
 
 [package.optional-dependencies]
@@ -3570,7 +3570,7 @@ requires-dist = [
     { name = "safetensors", specifier = ">=0.4" },
     { name = "tensorboard", specifier = ">=2.21" },
     { name = "torchdata", specifier = ">=0.10" },
-    { name = "xpm-mlboard", extras = ["tensorboard"], specifier = ">=0.2.0" },
+    { name = "xpm-mlboard", extras = ["tensorboard"], specifier = ">=0.4.0" },
 ]
 
 [package.metadata.requires-dev]
