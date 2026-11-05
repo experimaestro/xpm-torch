@@ -17,10 +17,9 @@ class LearningExperimentHelper(ExperimentHelper):
 
     @cached_property
     def monitoring_service(self) -> MonitoringService:
-        """Returns the (lazily created) monitoring service"""
-        return self.xp.add_service(
-            self.monitoring_backend(self.xp.resultspath / "runs")
-        )
+        """Returns the (lazily created) monitoring service (under
+        ``xp.resultspath / "runs"``; inactive outside the NORMAL run mode)"""
+        return self.xp.add_service(self.monitoring_backend("runs"))
 
     @cached_property
     def tensorboard_service(self) -> MonitoringService:
