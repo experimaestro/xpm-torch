@@ -51,7 +51,8 @@ def list_checkpoints(checkpointspath: Path) -> List[Path]:
 def _check_allocated(path: Path, problems: List[str]):
     st = path.stat()
     blocks = getattr(st, "st_blocks", None)
-    if blocks is not None and st.st_size > 0:
+    # Files smaller than 4KB can have sub-block allocation anomalies on Lustre/NFS
+    if blocks is not None and st.st_size >= 4096:
         if blocks * 512 < MIN_ALLOCATED_RATIO * st.st_size:
             problems.append(
                 f"{path.name}: sparse file ({blocks * 512} bytes allocated for "
